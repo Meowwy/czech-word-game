@@ -54,9 +54,9 @@ It sounds reasonable. It does not work. Tested against the live API:
 ?data=gfjzisjv  -> result: [["gfjzisjv"]]   0 suggestions   (keyboard mash)
 ```
 
-**Why?** Korektor is a *noisy-channel* spellchecker. It models "what did the user probably mean?"
-by looking for real words within about 1–2 edits of the input. Gibberish is *too far from
-anything* to attract a candidate — so it returns nothing, which is precisely the same signal it
+**Why?** Korektor is a _noisy-channel_ spellchecker. It models "what did the user probably mean?"
+by looking for real words within about 1–2 edits of the input. Gibberish is _too far from
+anything_ to attract a candidate — so it returns nothing, which is precisely the same signal it
 gives for a perfectly spelled word.
 
 The failure mode is the exact opposite of what a word game needs. It accepted **36 of 59**
@@ -72,30 +72,30 @@ gibberish strings.
 Rather than trade opinions, three approaches were benchmarked against a hand-labelled 413-item
 test set:
 
-| validator | false accept | false reject | accuracy | p50 latency | p95 |
-|---|---|---|---|---|---|
-| **Offline word list** | **0.0 %** | 1.3 % | 99.3 % | **0.006 ms** | 0.02 ms |
-| MorphoDiTa REST (`guesser=no`) | 1.7 % | 0.0 % | 99.3 % | 24.6 ms | 295 ms |
-| Korektor (`0 suggestions = valid`) | **30.2 %** | 3.4 % | 85.0 % | 25.0 ms | 299 ms |
+| validator                          | false accept | false reject | accuracy | p50 latency  | p95     |
+| ---------------------------------- | ------------ | ------------ | -------- | ------------ | ------- |
+| **Offline word list**              | **0.0 %**    | 1.3 %        | 99.3 %   | **0.006 ms** | 0.02 ms |
+| MorphoDiTa REST (`guesser=no`)     | 1.7 %        | 0.0 %        | 99.3 %   | 24.6 ms      | 295 ms  |
+| Korektor (`0 suggestions = valid`) | **30.2 %**   | 3.4 %        | 85.0 %   | 25.0 ms      | 299 ms  |
 
-*False accept* = junk let through, the cheating failure. *False reject* = a real word refused, the
+_False accept_ = junk let through, the cheating failure. _False reject_ = a real word refused, the
 annoying failure.
 
 ### The test set matters more than the score
 
 Accuracy is meaningless unless the negatives are **hard**. The 413 items are five classes:
 
-| class | n | what |
-|---|---|---|
-| P1 | 168 | common inflected words, all parts of speech |
-| P2 | 66 | rare-but-real, long, derived — catches an over-aggressive filter |
-| N1 | 59 | keyboard mash — the easy negative |
-| N2 | 70 | **plausible Czech pseudo-words** (`stromovina`, `kočkovina`) |
-| N3 | 50 | misspellings and stripped diacritics |
+| class | n   | what                                                             |
+| ----- | --- | ---------------------------------------------------------------- |
+| P1    | 168 | common inflected words, all parts of speech                      |
+| P2    | 66  | rare-but-real, long, derived — catches an over-aggressive filter |
+| N1    | 59  | keyboard mash — the easy negative                                |
+| N2    | 70  | **plausible Czech pseudo-words** (`stromovina`, `kočkovina`)     |
+| N3    | 50  | misspellings and stripped diacritics                             |
 
 **N2 is the class that decides everything.** Those words obey Czech phonotactics and morphology
 perfectly — real stem, real productive suffix — but the combination was simply never coined. Any
-heuristic that guesses from word *shape* passes N1 and fails N2. Only a real dictionary separates
+heuristic that guesses from word _shape_ passes N1 and fails N2. Only a real dictionary separates
 them.
 
 > **Principle: design the evaluation set around the decisions your system will actually face.**
@@ -111,8 +111,8 @@ The benchmark still prints every disagreement, so labels stay auditable rather t
 
 Even though MorphoDiTa's API is accurate, the game builds its own list. Four reasons:
 
-1. **Rating needs the list anyway.** Nothing but a full word list can answer *"how many Czech words
-   contain `KOC`?"*. No API offers that. This alone settles it.
+1. **Rating needs the list anyway.** Nothing but a full word list can answer _"how many Czech words
+   contain `KOC`?"_. No API offers that. This alone settles it.
 2. **Rate limits.** LINDAT allows roughly 60 requests/second for one client (measured: 129 rapid
    requests → HTTP 429). A few dozen concurrent games would exceed it.
 3. **Speed.** 0.006 ms versus 25 ms, and no tail — the API's p95 is 295 ms, which on a 10-second
@@ -148,11 +148,11 @@ A list of dictionary headwords is useless, because players type inflected forms.
 
 Three plausible sources exist, and each fails alone:
 
-| source | problem |
-|---|---|
-| **MorfFlex CZ 2.1** — 127M form-lemma-tag triples, exactly what we want | Behind a licence click-through. Its download URL returns an HTML licence page, so it cannot be scripted. |
-| **MorphoDiTa** — knows Czech morphology properly | It is an **analyzer**, not a **generator**. You can ask "is `kočkami` a word?" but never "list every word". |
-| **hunspell `cs_CZ`** — a spellchecker dictionary, freely downloadable | It is a **generator**, but a reckless one. |
+| source                                                                  | problem                                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **MorfFlex CZ 2.1** — 127M form-lemma-tag triples, exactly what we want | Behind a licence click-through. Its download URL returns an HTML licence page, so it cannot be scripted.    |
+| **MorphoDiTa** — knows Czech morphology properly                        | It is an **analyzer**, not a **generator**. You can ask "is `kočkami` a word?" but never "list every word". |
+| **hunspell `cs_CZ`** — a spellchecker dictionary, freely downloadable   | It is a **generator**, but a reckless one.                                                                  |
 
 The last two fail in **opposite directions**, and that is exploitable:
 
@@ -206,11 +206,21 @@ That is the price of high recall, and exactly what the judge is there to clean u
 
 `01-fetch.mjs` downloads three files:
 
-| file | source | licence |
-|---|---|---|
-| `cs_CZ.dic` | LibreOffice dictionaries — 261,167 Czech stems | GPL |
-| `cs_CZ.aff` | the matching affix rules | GPL |
-| `freq_cs.txt` | hermitdave/FrequencyWords — Czech word frequencies | MIT |
+| file          | source                                             | licence | note                                                                              |
+| ------------- | -------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
+| `cs_CZ.dic`   | [LibreOffice dictionaries](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ) — 261,167 Czech stems     | GPL     | stem = kořen slova (eg. děla-; hrad-)                                             |
+| `cs_CZ.aff`   | [the matching affix rules](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ)                           | GPL     | rules on what we can add to the stem (eg. děla**t**, děla**jí**...)               |
+| `freq_cs.txt` | [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords/tree/master/content/2018/cs) — Czech word frequencies | MIT     | precalculated frequency from a OpenSubtitles corpus — Czech film and TV subtitles |
+
+The exact download URLs, copied verbatim from the `SOURCES` array in `poc/scripts/01-fetch.mjs`:
+
+```
+data/cs_CZ.dic     https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.dic
+data/cs_CZ.aff     https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.aff
+data/freq_cs.txt   https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/cs/cs_full.txt
+```
+
+On disk after fetching: 3.7 MB, 0.11 MB and 21.9 MB — about 25 MB in total.
 
 All three are plain files on GitHub with no click-through — which is exactly why they were chosen
 over the technically superior MorfFlex.
@@ -218,7 +228,9 @@ over the technically superior MorfFlex.
 The whole script is a loop with one important line:
 
 ```js
-if (existsSync(path) && statSync(path).size > 0) { /* skip */ }
+if (existsSync(path) && statSync(path).size > 0) {
+  /* skip */
+}
 ```
 
 > **Principle: make every stage idempotent and cheap to re-run.** Running `npm run build:words`
@@ -251,7 +263,7 @@ if (word.length >= 2 && word.length <= 40 && CZECH.test(word) && !emitted.has(wo
 
 Result: **4,328,817 unique candidates.**
 
-Both cleanups exist for the same reason: the *next* stage costs money and time per item.
+Both cleanups exist for the same reason: the _next_ stage costs money and time per item.
 
 > **Principle: filter cheaply before you filter expensively.** Every item removed here is one you
 > never pay an API round-trip for. Order your pipeline so the cheap, high-volume rejections happen
@@ -277,20 +289,20 @@ part of speech. So `commonPOS === 'X'` is a clean, unambiguous "not a word".
 
 > **Principle: turn off a dependency's helpfulness when you need a raw signal.** Convenience
 > features — fuzzy matching, autocorrect, fallbacks, imputation — are designed to always give you
-> *an* answer. When you are using a tool as a *classifier*, that is the opposite of what you want.
+> _an_ answer. When you are using a tool as a _classifier_, that is the opposite of what you want.
 
 ### Batching, and finding the batch size empirically
 
 ```js
-const BATCH = 20_000;   // 100k gets HTTP 413; 20k measured fastest (~82k words/s)
-const CONCURRENCY = 3;  // polite: this is a free academic service
+const BATCH = 20_000; // 100k gets HTTP 413; 20k measured fastest (~82k words/s)
+const CONCURRENCY = 3; // polite: this is a free academic service
 ```
 
 4.3M individual requests at ~25 ms each would take **30 hours**. Batched at 20,000 words per
 request, the whole job takes **34 seconds** — about 82,000 words/second.
 
 The batch size was found by trying: 100,000 returns HTTP 413 (payload too large), 20,000 was
-fastest in practice. The comment records both the answer *and* the failed attempt.
+fastest in practice. The comment records both the answer _and_ the failed attempt.
 
 > **Principle: with a remote API, the batch size is usually the single biggest performance lever —
 > and it is empirical.** There is a curve with a bad end at both extremes: too small and per-request
@@ -318,7 +330,9 @@ every subsequent tag. Failing loudly is the only safe response.
 
 ```js
 let done = 0;
-if (existsSync(OUT)) { for await (const _ of rl) done++; }
+if (existsSync(OUT)) {
+  for await (const _ of rl) done++;
+}
 const todo = all.slice(done);
 ```
 
@@ -344,12 +358,12 @@ ADSL         B            <- abbreviation
 ```
 
 A lemma carrying MorfFlex's `_;` marker (`Praha_;G`, `Novák_;S`) is a proper name. The tagger
-records *both* classifications separately and leaves the decision to the next stage.
+records _both_ classifications separately and leaves the decision to the next stage.
 
 Why? Because tagging costs 34 seconds of API calls and filtering costs 12 seconds of local CPU.
 Recording both means changing policy on proper nouns is a re-filter, not a re-tag.
 
-> **Principle: store observations, not verdicts.** The expensive stage should record what it *saw*
+> **Principle: store observations, not verdicts.** The expensive stage should record what it _saw_
 > in as raw a form as is practical; the cheap stage applies the policy. Bake a decision into
 > expensive data and every future change to that decision costs you the expensive stage again.
 > This is the same reason you keep raw event logs alongside aggregates.
@@ -359,7 +373,7 @@ Recording both means changing policy on proper nouns is a re-filter, not a re-ta
 `04-filter.mjs` reads the TSV and keeps forms whose part-of-speech is real:
 
 ```js
-const REAL_POS = new Set([...'NAVDCPITRJ']);
+const REAL_POS = new Set([..."NAVDCPITRJ"]);
 ```
 
 Noun, adjective, verb, adverb, numeral, pronoun, interjection, particle, preposition, conjunction.
@@ -383,16 +397,16 @@ The fix — strip diacritics from every common word, then delete any proper-only
 matches a stripped spelling:
 
 ```js
-const strip = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+const strip = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 ```
 
 `NFD` is Unicode Normalization Form D: it decomposes `č` into `c` plus a combining caron, which the
 regex then deletes. **5,347 forms dropped.** `npm test` asserts `kocka` and `nemec` are rejected,
 so it cannot silently regress.
 
-> **Principle: when two datasets merge, look for collisions in the *normalised* space, not the
+> **Principle: when two datasets merge, look for collisions in the _normalised_ space, not the
 > literal one.** Case-folding, accent-stripping, whitespace-trimming and Unicode normalisation all
-> create collisions that were not visible in the raw data. Ask what your keys look like *after*
+> create collisions that were not visible in the raw data. Ask what your keys look like _after_
 > every transformation the system applies.
 
 > **Principle: every rule you rely on deserves a test that fails if it breaks.** The diacritics
@@ -413,14 +427,14 @@ No — because Tier A contains things like:
 abcházštinami   abdikovanostech   abdikovanostmi   abdikovanosti
 ```
 
-Real Czech words. They should absolutely be **accepted** if typed. But nobody will *think* of them
+Real Czech words. They should absolutely be **accepted** if typed. But nobody will _think_ of them
 under time pressure. Counting them makes every prompt look easy and the rating meaningless.
 
-So Tier B answers a different question: *how many words would a human actually produce?* Filter by
+So Tier B answers a different question: _how many words would a human actually produce?_ Filter by
 real-world usage:
 
 ```js
-const tierB = [...common].filter((w) => (freq.get(w) ?? 0) >= TIER_B_MIN_FREQ);  // 50
+const tierB = [...common].filter((w) => (freq.get(w) ?? 0) >= TIER_B_MIN_FREQ); // 50
 ```
 
 ### Where the frequency data comes from
@@ -449,16 +463,16 @@ are full of formal vocabulary nobody blurts out with a bomb ticking.
 
 ### Why the cut is so severe
 
-| subtitle frequency | common words | share | |
-|---|---|---|---|
-| absent (0) | 2,374,662 | 82.3% | |
-| 1–9 | 309,595 | 10.7% | |
-| 10–49 | 107,212 | 3.7% | |
-| **50–299** | **60,843** | **2.1%** | kept |
-| **300+** | **31,767** | **1.1%** | kept |
+| subtitle frequency | common words | share    |      |
+| ------------------ | ------------ | -------- | ---- |
+| absent (0)         | 2,374,662    | 82.3%    |      |
+| 1–9                | 309,595      | 10.7%    |      |
+| 10–49              | 107,212      | 3.7%     |      |
+| **50–299**         | **60,843**   | **2.1%** | kept |
+| **300+**           | **31,767**   | **1.1%** | kept |
 
 **82% of real Czech forms never appear even once** in 243M tokens. That is inflection: the words
-are legitimate, but most *specific forms* are vanishingly rare in speech.
+are legitimate, but most _specific forms_ are vanishingly rare in speech.
 
 Tier B keeps **92,610 words — 3.2% of common.** At the boundary:
 
@@ -544,21 +558,21 @@ ne snesitelnost      <- "ne" here
 nes ne sitelnost     <- and "ne" again
 ```
 
-Without the `Set`, this one word would add **2** to the tally for `ne`. But the question is *"how
-many words contain this"*, not *"how many times does it occur"*. One word is one answer a player
+Without the `Set`, this one word would add **2** to the tally for `ne`. But the question is _"how
+many words contain this"_, not _"how many times does it occur"_. One word is one answer a player
 can give; it must not count twice for repeating a syllable.
 
 > **Principle: this is document frequency versus term frequency.** Words are the documents,
 > substrings are the terms, and the `Set` converts TF into DF. Getting this backwards is a classic
 > counting bug: long, repetitive items silently inflate common terms. Whenever you aggregate,
-> state explicitly what one unit of the count *is*.
+> state explicitly what one unit of the count _is_.
 
 ### Step 3 — Tally across the corpus
 
 A worked example with a 3-word corpus:
 
-| word | its distinct substrings |
-|---|---|
+| word  | its distinct substrings |
+| ----- | ----------------------- |
 | kočka | ko oč čk ka koč očk čka |
 | kočky | ko oč čk ky koč očk čky |
 | kotel | ko ot te el kot ote tel |
@@ -571,7 +585,7 @@ ot  -> 1     te  -> 1     el  -> 1
 kot -> 1     ote -> 1     tel -> 1
 ```
 
-`ko` scores 3, `čka` scores 1. On a real corpus that ordering *is* the difficulty ranking. No
+`ko` scores 3, `čka` scores 1. On a real corpus that ordering _is_ the difficulty ranking. No
 cleverness required — the frequency count is the difficulty model.
 
 **Complexity:** each word costs `2L-3` operations, so the total is proportional to the total
@@ -610,14 +624,14 @@ medium   50 <= c < 300
 hard      5 <= c < 50
 ```
 
-| band | prompts | share |
-|---|---|---|
-| easy | 690 | 8% |
-| medium | 2,474 | 30% |
-| hard | 5,096 | **62%** |
+| band   | prompts | share   |
+| ------ | ------- | ------- |
+| easy   | 690     | 8%      |
+| medium | 2,474   | 30%     |
+| hard   | 5,096   | **62%** |
 
 **Why so lopsided?** Substring frequency follows a Zipf-like law — a few substrings are wildly
-common, and there is a very long tail of rare ones. Equal buckets would actually be *wrong*: there
+common, and there is a very long tail of rare ones. Equal buckets would actually be _wrong_: there
 genuinely are far more obscure letter combinations than common ones, so "hard" should be the
 biggest pool.
 
@@ -631,12 +645,12 @@ biggest pool.
 Prompts are **rated** against Tier B but answers are **validated** against Tier A, so the rating is
 always a large understatement:
 
-| prompt | band | Tier B rating | real Tier A solutions |
-|---|---|---|---|
-| `ne` | easy | 9,850 | 1,265,266 |
-| `čl` | medium | 57 | 4,154 |
-| `koc` | hard | 16 | 1,472 |
-| `kůl` | hard | 8 | 88 |
+| prompt | band   | Tier B rating | real Tier A solutions |
+| ------ | ------ | ------------- | --------------------- |
+| `ne`   | easy   | 9,850         | 1,265,266             |
+| `čl`   | medium | 57            | 4,154                 |
+| `koc`  | hard   | 16            | 1,472                 |
+| `kůl`  | hard   | 8             | 88                    |
 
 Measured across all 8,260 prompts:
 
@@ -646,7 +660,7 @@ min 1.0x   p25 24.5x   median 41.3x   p75 68.6x   p95 171.4x   max 4594.7x
 
 **Zero prompts have no solution.** The worst is `ždé` with 5. `jvy` displays 7 but has 3,925.
 
-That gap *is* the design: rating models the player, acceptance models the language.
+That gap _is_ the design: rating models the player, acceptance models the language.
 
 > **Principle: report the distribution, not a range you eyeballed.** This figure was documented as
 > "17–67x" for a while. That was roughly the interquartile range presented as if it were the full
@@ -682,7 +696,7 @@ in well under a millisecond.
 ## The obvious approach, and its cost
 
 ```js
-const set = new Set(readFileSync('words.txt', 'utf8').split('\n'));
+const set = new Set(readFileSync("words.txt", "utf8").split("\n"));
 ```
 
 Correct, one line, and **384 MB of heap** with a ~2 second startup. JavaScript strings carry
@@ -707,10 +721,10 @@ has(word) {
 }
 ```
 
-| | memory | load | lookup |
-|---|---|---|---|
-| `Set<string>` | 384 MB | ~2 s | ~25× faster |
-| **Buffer + binary search** | **48 MB** | **170 ms** | 380k/sec |
+|                            | memory    | load       | lookup      |
+| -------------------------- | --------- | ---------- | ----------- |
+| `Set<string>`              | 384 MB    | ~2 s       | ~25× faster |
+| **Buffer + binary search** | **48 MB** | **170 ms** | 380k/sec    |
 
 The `Set` is genuinely faster per lookup — but 380,000 lookups/second is already absurd for a game
 where a human types a word every few seconds. **8× less memory is the constraint that matters**,
@@ -729,7 +743,8 @@ Binary search only works if the list is sorted **in the same order the compariso
 comparison is `Buffer.compare` — raw UTF-8 bytes. So the build must sort by bytes too:
 
 ```js
-const byBytes = (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+const byBytes = (a, b) =>
+  Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
 ```
 
 Sort it with JavaScript's default string comparison or `localeCompare` and lookups break **only on
