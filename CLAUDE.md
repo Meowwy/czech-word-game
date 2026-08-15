@@ -254,6 +254,15 @@ directory and silently falls back to defaults if it isn't there.
   `kterej`, `nevim`, `zejtra`) — arguably correct for a word game. Closing it means parsing MorfFlex
   CZ 2.1 directly, which requires a manual browser download.
 
+### Line endings — `.gitattributes` is load-bearing
+
+`core.autocrlf=true` is the common Windows default and rewrites LF to CRLF on checkout. That would
+leave a trailing `` on every line of `words.txt`, and since `WordIndex` splits on byte `0x0A` and
+compares with `Buffer.compare`, **every lookup would fail** — but only after a clone, never on the
+machine that generated the file. The root `.gitattributes` pins `* text=auto eol=lf` and marks
+`poc/data/*.txt` and `*.tsv` as `-text` so git never transforms them. Verified byte-identical
+through a clone round-trip. Do not remove it.
+
 ### Generated data
 
 `.gitignore` excludes the large intermediates (`candidates.txt`, `tagged.tsv`, `freq_cs.txt`) but
