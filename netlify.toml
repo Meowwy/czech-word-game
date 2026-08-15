@@ -1,0 +1,15 @@
+# Root config — deliberately minimal.
+#
+# Its ONLY job is to pin the base directory, because "a base directory specified
+# in a root-level netlify.toml overrides the UI setting". Everything else lives in
+# poc/netlify.toml: once base is set, Netlify searches for config in the order
+# package dir -> base dir -> root dir, so poc/netlify.toml is the file that wins.
+#
+# It has to live there anyway — @sveltejs/adapter-netlify looks for netlify.toml
+# in the project directory, not the repo root, and silently falls back to defaults
+# if it is missing.
+#
+# Do not add build/functions/redirects settings here. Two config files that both
+# define real settings will drift.
+[build]
+  base = "poc"
