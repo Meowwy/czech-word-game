@@ -384,5 +384,6 @@ min 1.0x   p25 24.5x   median 41.3x   p75 68.6x   p95 171.4x   max 4594.7x
 **Zero prompts have no solution.** The very worst is `ždé` with 5 real answers. `jvy` displays 7
 but has 3,925 — a 560x gap.
 
-> Older copies of `README.md` and `CLAUDE.md` quote this range as "17–67x". That was roughly the
-> interquartile range stated as though it were the full range. The correct figures are above.
+> This figure was previously documented as "17–67x" in `README.md` and `CLAUDE.md`. That was
+> roughly the interquartile range written as though it were the full range, and understated the
+> effect considerably. Both have been corrected to the measured percentiles above.

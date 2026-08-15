@@ -44,8 +44,9 @@ You never see how long you have — that is the game.
 
 Prompts are 2–3 characters **with diacritics** (`ČL`, `KŮL`, `ŮŽ`, `ŠŤ`), computed from the word
 data at build time. The rating counts *common* words, but answers validate against the full 3.48M
-form list, so real solutions run 17–67× higher — the rating measures how easily you think of one,
-not whether one exists. **No prompt is a dead end.** The rating is never shown in-game.
+form list, so real solutions run a **median 41× higher** (p25 24×, p75 69×, max 4,595×) — the
+rating measures how easily you think of one, not whether one exists. Checked over all 8,260
+prompts: **none has zero solutions**, and the worst has 5. The rating is never shown in-game.
 
 ## How it is deployed
 

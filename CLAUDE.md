@@ -98,10 +98,14 @@ abbreviation (`ADSL`), `F` foreign (`Abbott`), `S` geographic (`Alžírsko`), `Z
 | `data/words-common.txt` | 92.6k forms | **prompt rating only** — frequency-filtered common vocabulary. |
 
 Prompts are rated by how many *Tier B* words contain them, but submissions validate against
-*Tier A*, so real solutions run 17–67× higher than the rating. A "hard" prompt rated 8 words has
-hundreds of valid answers. The rating measures *how easily a human thinks of one*, not whether one
-exists — no prompt is ever a dead end. Don't "fix" this asymmetry; it is the design. The game never
-displays the rating, so only difficulty banding depends on it.
+*Tier A*, so real solutions always outnumber the rating. Measured across all 8,260 prompts:
+
+    min 1.0×   p25 24.5×   median 41.3×   p75 68.6×   p95 171.4×   max 4594.7×
+
+The median *hard* prompt is rated under 50 and has **668** valid answers. **No prompt has zero** —
+the worst, `ždé`, has 5. The rating measures *how easily a human thinks of one*, not whether one
+exists. Don't "fix" this asymmetry; it is the design. The game never displays the rating, so only
+difficulty banding depends on it.
 
 Tier B contains **zero** proper nouns, so prompt generation is unaffected by `INCLUDE_PROPER_NOUNS`.
 
