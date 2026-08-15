@@ -22,6 +22,7 @@ whole thing with `cd poc && npm run build:words` (~70 s, needs network).
   - [3.7 Export prompts to the game backend](#37-export-prompts-to-the-game-backend)
 - [Part 4 — Serving it at runtime](#part-4--serving-it-at-runtime)
 - [Part 5 — Principles worth stealing](#part-5--principles-worth-stealing)
+- [Appendix — every external source, in one place](#appendix--every-external-source-in-one-place)
 
 ---
 
@@ -47,7 +48,16 @@ The original project brief proposed a shortcut. LINDAT (a Czech academic NLP ser
 > Send the word to Korektor. If it returns **zero correction suggestions**, the word must be
 > correct.
 
-It sounds reasonable. It does not work. Tested against the live API:
+It sounds reasonable. It does not work. The endpoint is
+[LINDAT Korektor](https://lindat.mff.cuni.cz/services/korektor/), called by
+`src/lib/validators/korektor.ts` as:
+
+```
+https://lindat.mff.cuni.cz/services/korektor/api/suggestions
+    ?data=<word>&model=czech-spellchecker-130202&suggestions=5
+```
+
+Tested against the live API:
 
 ```
 ?data=nazdar    -> result: [["nazdar"]]     0 suggestions   (real word)
@@ -275,8 +285,19 @@ contract with the next stage.
 
 ## 3.3 Tag: ask an expert which are real
 
-`03-tag.mjs` sends all 4.3M candidates to MorphoDiTa's `/analyze` endpoint and records what came
-back. This is the precision stage, and the only one that touches the network in bulk.
+`03-tag.mjs` sends all 4.3M candidates to
+[LINDAT MorphoDiTa](https://lindat.mff.cuni.cz/services/morphodita/) and records what came back.
+This is the precision stage, and the only one that touches the network in bulk.
+
+```
+POST https://lindat.mff.cuni.cz/services/morphodita/api/analyze
+     data=<20,000 words, newline separated>
+     input=vertical  guesser=no  output=json
+```
+
+MorphoDiTa is a research tool from the Institute of Formal and Applied Linguistics at Charles
+University ([project page](https://ufal.mff.cuni.cz/morphodita)). Its models are CC BY-NC-SA 4.0,
+which is where this project's non-commercial constraint comes from — see `NOTICE.md`.
 
 ### `guesser=no` is load-bearing
 
@@ -818,3 +839,52 @@ Collected, in rough order of how often they generalise:
 
 20. **Say out loud when something does not do what it appears to do.** The Czech-letters regex on
     prompts currently filters nothing. Better documented as a safety net than left to look load-bearing.
+
+---
+
+# Appendix — every external source, in one place
+
+Everything this project pulls from outside itself. All URLs are the ones in the code, not
+re-typed; the licence column is summarised, with the full attribution in
+[`NOTICE.md`](NOTICE.md).
+
+## Downloaded datasets — `poc/scripts/01-fetch.mjs`
+
+| what | URL | licence |
+|---|---|---|
+| hunspell Czech stems | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.dic` | GPL |
+| hunspell affix rules | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.aff` | GPL |
+| Czech frequency list | `https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/cs/cs_full.txt` | MIT |
+
+Browsable: [LibreOffice/dictionaries `cs_CZ`](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ)
+· [hermitdave/FrequencyWords `cs`](https://github.com/hermitdave/FrequencyWords/tree/master/content/2018/cs)
+
+## Web services
+
+| what | endpoint | used by | when |
+|---|---|---|---|
+| MorphoDiTa analyzer | `https://lindat.mff.cuni.cz/services/morphodita/api/analyze` | `scripts/03-tag.mjs`, `src/lib/validators/morphodita.ts` | build time, and the dashboard |
+| Korektor spellchecker | `https://lindat.mff.cuni.cz/services/korektor/api/suggestions` | `src/lib/validators/korektor.ts` | dashboard only — kept to demonstrate its failure |
+
+Both are free academic services from [LINDAT/CLARIAH-CZ](https://lindat.mff.cuni.cz/) at Charles
+University. **Neither is called during gameplay.** All remote calls go through
+`src/lib/validators/lindat.ts`, which paces at 25 ms between requests (~40/s, under the measured
+~60/s ceiling) and retries HTTP 429 with exponential backoff.
+
+## Source not used, and why
+
+| what | why not |
+|---|---|
+| [MorfFlex CZ 2.1](https://lindat.mff.cuni.cz/) — 127M form-lemma-tag triples | The ideal source, but its download sits behind a licence click-through: the bitstream URL returns an HTML licence page, so it cannot be scripted. Closing the remaining 5.5 % recall gap means parsing it by hand. |
+
+## Libraries doing the heavy lifting
+
+| package | role |
+|---|---|
+| `hunspell-reader` | expands `.dic` + `.aff` into surface forms (`scripts/02-expand.mjs`) |
+| `convex` / `convex-svelte` | multiplayer room state and reactive subscriptions |
+
+## Inspiration
+
+[jklm.fun](https://jklm.fun/) — the Bomb Party game this clones. No code or assets were taken;
+the `min. N wpp` counter visible in its UI is what suggested rating prompts by word count.
