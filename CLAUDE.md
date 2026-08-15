@@ -135,9 +135,9 @@ where `included_files` puts them.
 | `convex/_generated/` | **generated** by `npx convex dev` — committed, as Convex intends |
 | `convex/tsconfig.json` | required by Convex to typecheck the function directory |
 
-The Convex project is `debuchankovana` under team `pavel-koleckar`; the dev deployment is
-`agile-sandpiper-297`. `npx convex dev` writes `CONVEX_DEPLOYMENT` and `PUBLIC_CONVEX_URL` into
-`.env.local` (gitignored).
+The Convex project is `debuchankovana` under team `pavel-koleckar`. `npx convex dev` writes the
+deployment name and client URL into `.env.local` (gitignored) — deliberately not repeated here,
+since this repo is public and those endpoints accept the public mutations.
 
 Note `prompts.data.ts` does not appear in `convex/_generated/api.d.ts` — Convex skips the dotted
 filename when building the API surface. Harmless: it exports no Convex functions and is imported
@@ -242,7 +242,9 @@ directory and silently falls back to defaults if it isn't there.
 ## Data policy
 
 - **Licensing is non-commercial.** MorphoDiTa/MorfFlex models are CC BY-NC-SA 4.0; hunspell `cs_CZ`
-  is GPL. Going commercial means replacing the tagging oracle in `03-tag.mjs`.
+  is GPL. Going commercial means replacing the tagging oracle in `03-tag.mjs`. The repo is public,
+  so this is spelled out in `NOTICE.md`; `LICENSE` is MIT for the **code only** and explicitly
+  carves out `poc/data/` and `convex/prompts.data.ts`.
 - **Diacritics are required** — `kocka` is rejected, `kočka` accepted. Czech surnames are often
   diacritics-free twins of common nouns (`Kocka`/`kočka`, `Nemec`/`Němec`); lowercased they would
   silently defeat this rule, so 5,347 such forms are dropped at build time in `04-filter.mjs`.
@@ -257,7 +259,8 @@ directory and silently falls back to defaults if it isn't there.
 ### Line endings — `.gitattributes` is load-bearing
 
 `core.autocrlf=true` is the common Windows default and rewrites LF to CRLF on checkout. That would
-leave a trailing `` on every line of `words.txt`, and since `WordIndex` splits on byte `0x0A` and
+leave a trailing `
+` on every line of `words.txt`, and since `WordIndex` splits on byte `0x0A` and
 compares with `Buffer.compare`, **every lookup would fail** — but only after a clone, never on the
 machine that generated the file. The root `.gitattributes` pins `* text=auto eol=lf` and marks
 `poc/data/*.txt` and `*.tsv` as `-text` so git never transforms them. Verified byte-identical

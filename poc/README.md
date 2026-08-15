@@ -193,7 +193,8 @@ disagreements so labels stay auditable rather than trusted.
 
 ## Licenses
 
-Non-commercial only, per the project decision. MorfFlex/MorphoDiTa models are CC BY-NC-SA 4.0;
+Non-commercial only, per the project decision. Full attribution is in `../NOTICE.md`; the
+code is MIT (`../LICENSE`) but **the word data is not covered by it**. MorfFlex/MorphoDiTa models are CC BY-NC-SA 4.0;
 hunspell `cs_CZ` is GPL; the frequency list is from
 [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords). Going commercial would
 mean dropping MorphoDiTa from the build and finding another tagging oracle.
