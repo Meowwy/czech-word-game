@@ -276,3 +276,5 @@ dictionary. Expect a ~58 MB first commit; `words.txt` is 45.7 MiB, just under Gi
 warning threshold and well under its 100 MiB hard limit, so it pushes cleanly.
 
 `poc/README.md` has the full measured benchmark numbers and the test-set methodology.
+`EXPLANATIONS.md` walks through how the two word lists are built and how prompts are rated,
+in tutorial form with measured numbers — read it before changing `04-filter.mjs`.
