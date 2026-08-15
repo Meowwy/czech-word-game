@@ -10,6 +10,10 @@
   let checking = $state(false);
   let results = $state<Result[]>([]);
   let checkError = $state('');
+  // Set from the first /api/check response: false on a public deployment, where
+  // the two LINDAT validators are disabled on purpose.
+  let remoteAvailable = $state(true);
+  let skipped = $state<string[]>([]);
 
   // Seeded from the server load, then overwritten by a re-run. $derived (rather
   // than $state) keeps it in sync with `data` instead of capturing a stale value;
@@ -32,6 +36,8 @@
       });
       const json = await res.json();
       results = json.results ?? [];
+      remoteAvailable = json.remote ?? true;
+      skipped = json.skipped ?? [];
     } catch (e) {
       checkError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -93,6 +99,14 @@
     </div>
 
     {#if checkError}<p class="err">{checkError}</p>{/if}
+    {#if !remoteAvailable && skipped.length}
+      <p class="note offline-note">
+        Only the offline validator runs here. {skipped.join(' and ')} call the public LINDAT
+        service, which rate-limits at ~60 req/s — a public URL proxying it is a good way to get
+        the service blocked, so they are enabled only in development. The full three-way
+        comparison below is the last recorded run.
+      </p>
+    {/if}
 
     {#if results.length}
       <table class="verdicts">
@@ -115,7 +129,9 @@
       <h2>Benchmark <span class="note">{benchNote}</span></h2>
       <div>
         <button onclick={() => runBench(true)} disabled={benchRunning}>Re-run offline only</button>
-        <button onclick={() => runBench(false)} disabled={benchRunning}>Re-run all three (~40s)</button>
+        {#if remoteAvailable}
+          <button onclick={() => runBench(false)} disabled={benchRunning}>Re-run all three (~40s)</button>
+        {/if}
       </div>
     </div>
 
@@ -237,6 +253,10 @@
   }
   button:hover:not(:disabled) { background: #3568cc; }
   button:disabled { opacity: .55; cursor: default; }
+  .offline-note {
+    margin: .7rem 0 0; padding: .6rem .8rem; line-height: 1.5;
+    background: #1b1e24; border: 1px solid #2d323b; border-radius: 8px; color: #8b939e;
+  }
 
   .examples { margin-top: .7rem; color: #8b939e; font-size: .85rem; }
   .chip {

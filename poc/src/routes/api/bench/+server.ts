@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { assertToolsEnabled } from '$lib/server/tools.ts';
+import { assertRemoteToolsEnabled, remoteToolsEnabled } from '$lib/server/tools.ts';
 import { runBench, measureLocalThroughput } from '$lib/bench.ts';
 import { getIndex } from '$lib/server/wordlist.ts';
 import { offlineValidator } from '$lib/validators/offline.ts';
@@ -11,8 +11,10 @@ import { stats } from '$lib/validators/lindat.ts';
 // Re-runs the full 413-item suite. The two remote validators are paced under the
 // LINDAT rate limit, so this takes ~40s — the UI warns before calling it.
 export const POST: RequestHandler = async ({ url }) => {
-  assertToolsEnabled();
-  const localOnly = url.searchParams.get('local') === '1';
+  // Offline-only is local, free and takes milliseconds — allowed anywhere. The
+  // full run is ~800 paced LINDAT requests and stays gated to dev/ENABLE_TOOLS.
+  const localOnly = url.searchParams.get('local') === '1' || !remoteToolsEnabled();
+  if (!localOnly) assertRemoteToolsEnabled();
   const index = getIndex();
   const validators = [
     offlineValidator(index, 'Offline list (binary search)'),
@@ -27,6 +29,8 @@ export const POST: RequestHandler = async ({ url }) => {
   }
   return json({
     results,
+    localOnly,
+    remote: remoteToolsEnabled(),
     throughput: measureLocalThroughput((w) => index.has(w), 50),
     ranAt: new Date().toISOString(),
   });
