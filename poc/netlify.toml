@@ -1,0 +1,26 @@
+# Set "Base directory" to `poc` in the Netlify UI. Netlify then reads this file,
+# and @sveltejs/adapter-netlify finds it too (it looks in the project directory,
+# not the repo root — a root-level netlify.toml is silently ignored by the adapter).
+[build]
+  publish = "build"
+  # `convex deploy` pushes the Convex functions, then runs the SvelteKit build with
+  # PUBLIC_CONVEX_URL injected. Needs CONVEX_DEPLOY_KEY set in the Netlify UI.
+  command = "npx convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'npm run build'"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  # SvelteKit does NOT copy project files into the serverless bundle. Without this
+  # the word index throws ENOENT on the first request. Paths are relative to the
+  # base directory (poc/).
+  included_files = ["data/words.txt", "data/prompts.json", "data/meta.json"]
+
+# The app is served under /slovni-hra (kit.paths.base), so the bare site root has
+# no route. This keeps <site>.netlify.app and pavel-koleckar.cz from 404-ing while
+# there is nothing else at the root. Delete it once a real landing page lives there.
+[[redirects]]
+  from = "/"
+  to = "/slovni-hra/"
+  status = 302

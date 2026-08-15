@@ -1,0 +1,15 @@
+node_modules/
+.svelte-kit/
+build/
+.netlify/
+.env
+.env.local
+.env.*.local
+
+# Generated word data — rebuild with `npm run build:words`.
+# NOTE: data/words.txt (48MB) and data/prompts.json are deliberately NOT ignored.
+# The Netlify build must not run build:words (~70s, 6GB heap, network), so the
+# built list has to be committed for the deployed function to have a dictionary.
+data/candidates.txt
+data/tagged.tsv
+data/freq_cs.txt

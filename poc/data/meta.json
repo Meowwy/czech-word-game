@@ -1,0 +1,17 @@
+{
+  "builtAt": "2026-08-15T08:33:48.008Z",
+  "candidates": 4270854,
+  "rejectedUnknown": 794269,
+  "rejectedAbbrevForeign": 672,
+  "tierA": 3475913,
+  "tierB": 92610,
+  "properNouns": 591834,
+  "droppedDiacriticTwins": 5347,
+  "includeProperNouns": true,
+  "prompts": 8260,
+  "byDifficulty": {
+    "easy": 690,
+    "medium": 2474,
+    "hard": 5096
+  }
+}

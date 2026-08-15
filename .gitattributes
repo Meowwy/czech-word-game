@@ -1,0 +1,16 @@
+# core.autocrlf is commonly `true` on Windows, which rewrites LF to CRLF on
+# checkout. Pin line endings here so the repo behaves identically on every machine
+# and on the Netlify build box regardless of anyone's local git config.
+* text=auto eol=lf
+
+# CRITICAL: never transform the generated word data.
+#
+# WordIndex (src/lib/validators/offline.ts) reads words.txt as one contiguous
+# Buffer, splits it on byte 0x0A, and binary-searches with Buffer.compare. A CRLF
+# checkout would leave a trailing \r on every word, so every single lookup would
+# fail — and it would fail only after a clone, never on the machine that built the
+# file. Mark them binary so git leaves the bytes exactly as written.
+poc/data/*.txt -text
+poc/data/*.tsv -text
+
+*.png binary

@@ -1,0 +1,655 @@
+[
+  {
+    "name": "Offline list (binary search)",
+    "kind": "local",
+    "classes": [
+      {
+        "klass": "P1",
+        "label": "P1 common words, inflected, all POS",
+        "total": 168,
+        "correct": 168,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "P2",
+        "label": "P2 rare-but-real / long / derived",
+        "total": 66,
+        "correct": 63,
+        "falseAccept": 0,
+        "falseReject": 3
+      },
+      {
+        "klass": "N1",
+        "label": "N1 random gibberish",
+        "total": 59,
+        "correct": 59,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "N2",
+        "label": "N2 plausible Czech pseudo-words",
+        "total": 70,
+        "correct": 70,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "N3",
+        "label": "N3 misspellings / stripped diacritics",
+        "total": 50,
+        "correct": 50,
+        "falseAccept": 0,
+        "falseReject": 0
+      }
+    ],
+    "accuracy": 0.9927360774818402,
+    "falseAcceptRate": 0,
+    "falseRejectRate": 0.01282051282051282,
+    "latency": {
+      "p50": 0.005699999999990268,
+      "p95": 0.023000000000024556,
+      "p99": 0.056500000000028194,
+      "max": 0.08530000000001792,
+      "mean": 0.008211622276029411
+    },
+    "throughput": 90027.24795640372,
+    "disagreements": [
+      {
+        "word": "obhospodařovávatelný",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "not in word list"
+      },
+      {
+        "word": "nejneobhospodařovávatelnějšímu",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "not in word list"
+      },
+      {
+        "word": "tchýně",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "not in word list"
+      }
+    ]
+  },
+  {
+    "name": "MorphoDiTa REST (guesser=no)",
+    "kind": "remote",
+    "classes": [
+      {
+        "klass": "P1",
+        "label": "P1 common words, inflected, all POS",
+        "total": 168,
+        "correct": 168,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "P2",
+        "label": "P2 rare-but-real / long / derived",
+        "total": 66,
+        "correct": 66,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "N1",
+        "label": "N1 random gibberish",
+        "total": 59,
+        "correct": 59,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "N2",
+        "label": "N2 plausible Czech pseudo-words",
+        "total": 70,
+        "correct": 69,
+        "falseAccept": 1,
+        "falseReject": 0
+      },
+      {
+        "klass": "N3",
+        "label": "N3 misspellings / stripped diacritics",
+        "total": 50,
+        "correct": 48,
+        "falseAccept": 2,
+        "falseReject": 0
+      }
+    ],
+    "accuracy": 0.9927360774818402,
+    "falseAcceptRate": 0.01675977653631285,
+    "falseRejectRate": 0,
+    "latency": {
+      "p50": 24.603900000001886,
+      "p95": 295.22999999999956,
+      "p99": 309.663700000001,
+      "max": 321.08140000000094,
+      "mean": 41.19504188861989
+    },
+    "throughput": 19.656987285313274,
+    "disagreements": [
+      {
+        "word": "vydrovina",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "vydrovina [NNFS1]"
+      },
+      {
+        "word": "muj",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "můj [PSIS4] | můj [PSYS1] | můj [PSYS5]"
+      },
+      {
+        "word": "tvuj",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "tvůj [PSIS4] | tvůj [PSYS1] | tvůj [PSYS5]"
+      }
+    ]
+  },
+  {
+    "name": "Korektor (0 suggestions = valid)",
+    "kind": "remote",
+    "classes": [
+      {
+        "klass": "P1",
+        "label": "P1 common words, inflected, all POS",
+        "total": 168,
+        "correct": 168,
+        "falseAccept": 0,
+        "falseReject": 0
+      },
+      {
+        "klass": "P2",
+        "label": "P2 rare-but-real / long / derived",
+        "total": 66,
+        "correct": 58,
+        "falseAccept": 0,
+        "falseReject": 8
+      },
+      {
+        "klass": "N1",
+        "label": "N1 random gibberish",
+        "total": 59,
+        "correct": 23,
+        "falseAccept": 36,
+        "falseReject": 0
+      },
+      {
+        "klass": "N2",
+        "label": "N2 plausible Czech pseudo-words",
+        "total": 70,
+        "correct": 59,
+        "falseAccept": 11,
+        "falseReject": 0
+      },
+      {
+        "klass": "N3",
+        "label": "N3 misspellings / stripped diacritics",
+        "total": 50,
+        "correct": 43,
+        "falseAccept": 7,
+        "falseReject": 0
+      }
+    ],
+    "accuracy": 0.8498789346246973,
+    "falseAcceptRate": 0.3016759776536313,
+    "falseRejectRate": 0.03418803418803419,
+    "latency": {
+      "p50": 24.98619999999937,
+      "p95": 298.856200000002,
+      "p99": 307.47780000000057,
+      "max": 311.4971000000005,
+      "mean": 57.37183147699733
+    },
+    "throughput": 15.06022558686381,
+    "disagreements": [
+      {
+        "word": "kanec",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: konec, kanec, kane, tanec, ranec"
+      },
+      {
+        "word": "zmrzlinářství",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: zmrzlinářští"
+      },
+      {
+        "word": "vodárnička",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: vinárnička"
+      },
+      {
+        "word": "kočkovat",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: očkovat, kočovat, kočkovat, oočkovat, kočkovati"
+      },
+      {
+        "word": "knihovat",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: knihovna, knihoven, knihovny"
+      },
+      {
+        "word": "bobrovina",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: borovina"
+      },
+      {
+        "word": "stul",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: stůl, stul, styl, stal, stál"
+      },
+      {
+        "word": "stulit",
+        "klass": "P2",
+        "expected": true,
+        "got": false,
+        "detail": "suggests: tulit, stulit, studit, stuliti, stuliv"
+      },
+      {
+        "word": "gfjzisjv",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "qwrtplk",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "xkcdvbn",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "mnbvcxz",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "ghjkljh",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "zxcvbn",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "fghjkl",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "asdfgh",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "jklqwe",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "bnmzxc",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "lkjhgf",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vbnmqw",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "tyuiop",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "dfghjk",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "hjklqw",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "ghjklz",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "xcvbnm",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "qazwsx",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "edcrfv",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "tgbyhn",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "wsxedc",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "rfvtgb",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "zsxdcf",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vgbhnj",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "azsxdc",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "fvgbhn",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "jmkolp",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "wsedrf",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "pqazws",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "xedcrf",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vtgbyh",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "fvtgby",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "crfvtg",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "gjkzwq",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vbnhjk",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "trewqz",
+        "klass": "N1",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "blbouncita",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "zmrzlivec",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "knihovatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "chlebatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "žížalatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "pštrosatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vodopádovina",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "žirafovina",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "kolotočatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vodopádatel",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "žirafovník",
+        "klass": "N2",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "kocka",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "cas",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "dobre",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "vcera",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "tvuj",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "nejlepsi",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      },
+      {
+        "word": "prirodovedec",
+        "klass": "N3",
+        "expected": false,
+        "got": true,
+        "detail": "no suggestions"
+      }
+    ]
+  }
+]
