@@ -57,8 +57,9 @@ process, no push storage — and Convex cannot hold the 48 MB word list (32 MiB 
 
 ---
 
-> A step-by-step walkthrough of the word lists and the prompt-rating algorithm, with worked
-> examples and measured numbers, is in [`../EXPLANATIONS.md`](../EXPLANATIONS.md).
+> A complete plain-English walkthrough of this pipeline — every stage, with worked examples,
+> measured numbers and the reasoning behind each choice — is in
+> [`../EXPLANATIONS.md`](../EXPLANATIONS.md).
 
 ## Word validation — how the list was built
 
