@@ -2,13 +2,15 @@
   import { base } from '$app/paths';
   import '../app.css';
   import { setupConvex } from 'convex-svelte';
-  import { env } from '$env/dynamic/public';
+  import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
   let { children } = $props();
 
-  // Set by `npx convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL` on Netlify,
-  // and written into .env.local by `npx convex dev` when working locally.
-  const convexUrl = env.PUBLIC_CONVEX_URL ?? '';
+  // STATIC, not dynamic. `convex deploy --cmd 'npm run build'` injects this into
+  // the build subprocess only — it is NOT in the serverless function's runtime
+  // environment, so $env/dynamic/public would read it as empty in production.
+  // Static inlines it into the bundle at build time, which is what that flag is for.
+  const convexUrl = PUBLIC_CONVEX_URL;
   if (convexUrl) setupConvex(convexUrl);
 </script>
 

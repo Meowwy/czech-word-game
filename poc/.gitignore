@@ -2,7 +2,9 @@ node_modules/
 .svelte-kit/
 build/
 .netlify/
-.env
+# .env is COMMITTED: it holds an empty PUBLIC_CONVEX_URL default so
+# $env/static/public always resolves and a fresh clone can still build.
+# Real values live in .env.local, which must never be committed.
 .env.local
 .env.*.local
 
