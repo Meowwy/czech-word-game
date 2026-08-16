@@ -1,20 +1,27 @@
 import { tv, type VariantProps } from 'tailwind-variants';
 
-// Ported from the pictionary project's shadcn/ui button (new-york style).
+/**
+ * Button styling, on the arena palette.
+ *
+ * `go` is deliberately the only green in the app: it marks sitting down to play
+ * and nothing else, so a player scanning the screen for "how do I get in" finds
+ * exactly one thing.
+ */
 export const buttonVariants = tv({
   base:
     'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ' +
-    'transition-all outline-none disabled:pointer-events-none disabled:opacity-50 shrink-0 ' +
-    'focus-visible:ring-[3px] focus-visible:ring-neutral-400/50',
+    'transition-all outline-none disabled:pointer-events-none disabled:opacity-40 shrink-0 ' +
+    'focus-visible:ring-[3px] focus-visible:ring-gold/40',
   variants: {
     variant: {
-      default: 'bg-neutral-900 text-neutral-50 shadow-xs hover:bg-neutral-900/90',
-      cta: 'bg-orange-500 text-white shadow-sm hover:bg-orange-600',
-      destructive: 'bg-red-500 text-white shadow-xs hover:bg-red-600',
-      outline: 'border border-neutral-200 bg-white shadow-xs hover:bg-neutral-100',
-      secondary: 'bg-neutral-100 text-neutral-900 shadow-xs hover:bg-neutral-200',
-      ghost: 'hover:bg-neutral-100 hover:text-neutral-900',
-      link: 'text-neutral-900 underline-offset-4 hover:underline',
+      default: 'bg-white/10 text-ink hover:bg-white/15',
+      go: 'bg-go text-white shadow-[0_3px_0_var(--color-go-dark)] hover:bg-go/90 active:translate-y-px active:shadow-[0_2px_0_var(--color-go-dark)]',
+      cta: 'bg-gold text-arena-edge shadow-[0_3px_0_var(--color-gold-dim)] hover:brightness-105 active:translate-y-px active:shadow-[0_2px_0_var(--color-gold-dim)]',
+      destructive: 'bg-danger/90 text-white hover:bg-danger',
+      outline: 'border border-panel-line bg-black/20 text-ink-dim hover:border-gold-dim hover:text-ink',
+      secondary: 'bg-panel text-ink-dim hover:text-ink',
+      ghost: 'text-ink-faint hover:bg-white/5 hover:text-ink',
+      link: 'text-gold underline-offset-4 hover:underline',
     },
     size: {
       default: 'h-9 px-4 py-2',

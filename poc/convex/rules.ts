@@ -82,4 +82,79 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
 export const MIN_LIVES = 1;
 export const MAX_LIVES = 5;
 export const MIN_PLAYERS = 2;
+/** Seats at the table. Spectators are not seats — see MAX_OCCUPANTS. */
 export const MAX_PLAYERS = 8;
+/**
+ * People in the room at all, players and watchers together. Only a bound on how
+ * much a single `rooms.view` read costs; the table itself never grows past
+ * MAX_PLAYERS.
+ */
+export const MAX_OCCUPANTS = 30;
+
+/** How often a client says it is still there. */
+export const HEARTBEAT_MS = 25_000;
+/**
+ * Silence after which a *watcher* is dropped from the room. Generous enough to
+ * survive a tab being backgrounded and a phone locking.
+ *
+ * Seated players are deliberately never pruned: someone who walks away mid-round
+ * loses lives to the bomb until they are out, which is both the correct result
+ * and code that already exists.
+ */
+export const GHOST_MS = 3 * HEARTBEAT_MS;
+
+/** Rooms drop out of the public browser once nothing has happened for this long. */
+export const ROOM_LIST_TTL_MS = 30 * 60_000;
+/** ...and are deleted outright once they have been quiet for this long. */
+export const ROOM_SWEEP_MS = 24 * 60 * 60_000;
+
+/** Longest draft broadcast to the table while someone types. */
+export const MAX_DRAFT = 40;
+
+/**
+ * How long the room waits once enough people have sat down.
+ *
+ * The opposite of `turnDurationMs` in every way that matters: this one is fixed,
+ * and the client is *told* when it ends. The fuse is hidden because not knowing
+ * is the game; this countdown is shown because a start you cannot see coming is
+ * just an ambush.
+ */
+export const COUNTDOWN_MS = 10_000;
+
+/** Nobody should be stopped at a name prompt on the way into a game. */
+export function guestNickname(rand: () => number = Math.random): string {
+  return `Host${1000 + Math.floor(rand() * 9000)}`;
+}
+
+/**
+ * Where seat `i` of `n` sits on the ring, in degrees, 0 = right and growing
+ * clockwise (SVG/CSS convention, y points down).
+ *
+ * Two players face each other across the bomb rather than stacking vertically,
+ * which is both what the reference does and the only arrangement that reads as
+ * a duel. Three or more spread evenly from the top.
+ *
+ * The result is left unnormalised — seat 1 of 2 comes back as 360, not 0 — so
+ * that consecutive seats always differ by exactly 360/n. Callers that care about
+ * direction rather than magnitude go through `shortestTurn`, which is modular.
+ */
+export function seatAngle(i: number, n: number): number {
+  if (n <= 1) return 180;
+  if (n === 2) return 180 + i * 180;
+  return -90 + (i * 360) / n;
+}
+
+/**
+ * The signed shortest way round from one angle to another, in (-180, 180].
+ *
+ * The arrow's rotation is accumulated rather than set: feeding a raw seat angle
+ * straight into `rotate()` makes it unwind the long way whenever the value wraps
+ * (350° to 10° would spin 340° backwards). Adding this delta to the angle the
+ * arrow is already at keeps it always taking the short path.
+ */
+export function shortestTurn(from: number, to: number): number {
+  let delta = (to - from) % 360;
+  if (delta > 180) delta -= 360;
+  if (delta <= -180) delta += 360;
+  return delta;
+}

@@ -2,8 +2,33 @@
 <html lang="cs">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Czech word validation PoC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#6a45c4" />
+    <link rel="icon" href="%sveltekit.assets%/img/bomb.png" />
+
+    <!-- The wordmark and the syllable on the bomb are set in Fredoka, which
+         `font-display: swap` otherwise paints in the system fallback first and
+         then reflows. Both subsets are needed for Czech and come to ~34KB
+         together, so preloading them costs one round trip and removes the flash.
+         The bomb is the first thing on both screens; preloading it stops the
+         arena assembling around a gap. -->
+    <link
+      rel="preload"
+      href="%sveltekit.assets%/fonts/fredoka-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="%sveltekit.assets%/fonts/fredoka-latin-ext.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preload" href="%sveltekit.assets%/img/bomb.png" as="image" />
+
+    <title>Debuchánkovaná</title>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

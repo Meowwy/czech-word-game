@@ -51,7 +51,18 @@ cd poc && npm run build:words
 Roughly 70 s, needs network, and hits the LINDAT API. `poc/README.md` documents the pipeline and
 the measured accuracy numbers.
 
+### Fredoka — the display typeface
+- Files: `poc/static/fonts/fredoka-latin.woff2`, `poc/static/fonts/fredoka-latin-ext.woff2`
+- Upstream: [Google Fonts](https://fonts.google.com/specimen/Fredoka), by Milena Brandão and
+  Hafontia
+- Licence: **SIL Open Font License 1.1** — permissive, including commercially. Redistributed
+  here as the two unmodified Google subsets (latin + latin-ext); both are needed, because Czech
+  splits across them (`á í é` in latin, `ě ř ů š č ž` in latin-ext).
+- Self-hosted rather than linked, so the game does not depend on fonts.gstatic.com at runtime.
+
 ## Also used
 
-- [jklm.fun](https://jklm.fun/) — the game this is a Czech clone of. No code or assets taken.
+- [jklm.fun](https://jklm.fun/) — the game this is a Czech clone of. The UI deliberately follows
+  its layout, but no code, artwork, or audio was taken from it. The bomb and arrow images in
+  `poc/static/img/` were supplied by the repository owner.
 - [shadcn/ui](https://ui.shadcn.com/) — the UI component patterns, MIT.

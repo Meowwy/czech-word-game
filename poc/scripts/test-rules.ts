@@ -11,12 +11,17 @@ import {
   MIN_TURN_MS,
   TURN_MAX_MS,
   TURN_MIN_MS,
+  COUNTDOWN_MS,
+  MAX_PLAYERS,
+  guestNickname,
   isValidCode,
   livingSeats,
   makeCode,
   nextLivingSeat,
   normalizeNickname,
   normalizeWord,
+  seatAngle,
+  shortestTurn,
   turnDurationMs,
 } from '../convex/rules.ts';
 
@@ -111,6 +116,77 @@ check('diacritics survive normalisation', normalizeWord('ŽÍŽALA') === 'žíž
 check('nicknames collapse whitespace', normalizeNickname('  Jan   Novák ') === 'Jan Novák');
 check('nicknames are capped at 20 chars', normalizeNickname('x'.repeat(50)).length === 20);
 check('blank nickname normalises to empty', normalizeNickname('   ') === '');
+
+// --- seating geometry ---------------------------------------------------------
+// The arena draws seats from these angles and swings the arrow to them, so a
+// sign error here is a player standing in the wrong place, not a crash.
+console.log('\nseating geometry');
+
+// Assert where a seat lands, not what number describes it: seatAngle is left
+// unnormalised so that gaps stay uniform, which makes 360 and 0 both correct.
+const wrap = (deg: number) => ((deg % 360) + 360) % 360;
+const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+const seatAt = (i: number, n: number) => {
+  const r = (seatAngle(i, n) * Math.PI) / 180;
+  return { x: Math.cos(r), y: Math.sin(r) };
+};
+
+check(
+  'two players face each other across the bomb',
+  near(seatAt(0, 2).x, -1) && near(seatAt(1, 2).x, 1) && near(seatAt(0, 2).y, 0),
+);
+check('a lone player sits on the left', near(seatAt(0, 1).x, -1));
+check(
+  'three or more open from the top',
+  near(seatAt(0, 3).y, -1) && near(seatAt(0, 5).y, -1),
+  'y points down, so the top is -1',
+);
+check(
+  'seats are evenly spaced round the ring',
+  [3, 4, 5, 6, 7, 8].every((n) => {
+    const gaps = Array.from({ length: n - 1 }, (_, i) => seatAngle(i + 1, n) - seatAngle(i, n));
+    return gaps.every((g) => near(g, 360 / n));
+  }),
+);
+check(
+  'no two seats share a heading, up to a full table',
+  Array.from({ length: MAX_PLAYERS }, (_, k) => k + 1).every(
+    (n) => new Set(Array.from({ length: n }, (_, i) => wrap(seatAngle(i, n)))).size === n,
+  ),
+);
+
+// --- arrow rotation -----------------------------------------------------------
+console.log('\narrow rotation');
+check('takes the short way over the wrap', shortestTurn(350, 10) === 20);
+check('and the short way back', shortestTurn(10, 350) === -20);
+check('standing still is zero', shortestTurn(90, 90) === 0);
+check('half a turn resolves forwards, not backwards', shortestTurn(0, 180) === 180);
+check(
+  'never asks for more than half a turn',
+  Array.from({ length: 720 }, (_, i) => shortestTurn(i - 360, (i * 37) % 360)).every(
+    (d) => d > -180 && d <= 180,
+  ),
+);
+check(
+  'accumulating deltas always lands on the right heading',
+  [
+    [0, 270],
+    [270, 45],
+    [45, 200],
+    [-720, 30],
+  ].every(([from, to]) => wrap(from + shortestTurn(from, to)) === wrap(to)),
+);
+
+// --- lobby countdown ----------------------------------------------------------
+console.log('\nlobby countdown');
+check('countdown is a whole number of seconds', COUNTDOWN_MS % 1000 === 0);
+check('countdown is long enough to read and cancel', COUNTDOWN_MS >= 5_000);
+check(
+  'guest nicknames survive the nickname normaliser',
+  Array.from({ length: 200 }, () => guestNickname()).every(
+    (n) => normalizeNickname(n) === n && /^Host\d{4}$/.test(n),
+  ),
+);
 
 // --- prompt pools bundled into Convex -----------------------------------------
 console.log('\nconvex prompt pools');

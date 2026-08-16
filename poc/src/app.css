@@ -1,67 +1,358 @@
 @import 'tailwindcss';
 
-/* Design tokens carried over from the pictionary project (shadcn "new-york",
-   neutral base). Kept in oklch so the two apps stay visually related. */
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+/* ───────────────────────────── typeface ─────────────────────────────
+   Fredoka (OFL), self-hosted rather than linked from fonts.gstatic.com: the
+   site is served from a subpath behind Netlify and a third-party font request
+   is one more thing that can be slow or blocked. Two subsets, split exactly as
+   Google splits them — Czech needs both, because á í é ú ý sit in latin
+   (U+00C0-00FF) while ě ř ů š č ž ď ť ň sit in latin-ext (U+0100-017F).
+   Dropping the ext subset would silently mangle half the alphabet.
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+   One variable file covers 400-700, so weight costs no extra bytes.
+
+   The /slovni-hra prefix is hard-coded because this is plain CSS, where
+   `base` from $app/paths cannot reach. It must match kit.paths.base. */
+@font-face {
+  font-family: 'Fredoka';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/slovni-hra/fonts/fredoka-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fredoka';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/slovni-hra/fonts/fredoka-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+/* ───────────────────────────── design tokens ─────────────────────────────
+   The palette is the game's identity: a warm, lamp-lit brown arena with one
+   violet band of chrome across the top, gold for the bomb and the arrow, and
+   green reserved for the single action that matters — sitting down to play.
+
+   Unlike the shadcn tokens these replace, these are actually used. Components
+   reference `bg-arena-edge` / `text-gold`, never a literal `neutral-200`, so
+   the whole game re-skins from this one block. */
+@theme {
+  --font-display: 'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* arena */
+  --color-arena-core: #5a4433;
+  --color-arena-mid: #3a2a20;
+  --color-arena-edge: #1a1210;
+
+  /* chrome */
+  --color-bar: #6a45c4;
+  --color-bar-dark: #533398;
+  --color-bar-fg: #f1e9ff;
+  --color-panel: #2a1e18;
+  --color-panel-line: #4a382c;
+
+  /* type */
+  --color-ink: #f6efe6;
+  --color-ink-dim: #bda995;
+  --color-ink-faint: #a08d7c;
+
+  /* accents */
+  --color-gold: #ffc93c;
+  --color-gold-dim: #a8802a;
+  --color-go: #3fbf62;
+  --color-go-dark: #2f9a4c;
+  --color-heart: #ff5c78;
+  --color-heart-out: #4a382c;
+  --color-danger: #ff6b5e;
+
+  --radius-card: 0.75rem;
 }
 
 @layer base {
-  * {
-    border-color: var(--border);
+  html {
+    /* The arena is a fixed-height app shell, not a scrolling document. */
+    height: 100%;
+    background-color: var(--color-arena-edge);
   }
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    height: 100%;
+    background-color: var(--color-arena-edge);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button {
+    cursor: pointer;
   }
 }
 
-/* bits-ui sets data-state on the dialog overlay and content. Two small keyframes
-   here instead of pulling in tw-animate-css for four class names. */
+/* The lamp-lit floor. One element carries both the pool of light and the
+   vignette, so the arena can be any aspect ratio without a visible seam. */
+.debu-arena-bg {
+  background:
+    radial-gradient(
+      120% 90% at 50% 42%,
+      var(--color-arena-core) 0%,
+      var(--color-arena-mid) 45%,
+      var(--color-arena-edge) 100%
+    ),
+    var(--color-arena-edge);
+}
+
+/* ───────────────────────────── motion ─────────────────────────────
+   Everything below is prefixed `debu-` and lives here rather than in a
+   component because several are applied through Tailwind arbitrary-value
+   classes on *child* components' elements, which Svelte's CSS scoping would
+   not rewrite. */
+
+/* Rejection feedback for the word input. */
+@keyframes debu-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+/* The bomb has no visible countdown — this is deliberate. Every animation on it
+   runs at a CONSTANT rate and must keep doing so: anything that accelerated as
+   the fuse burned down would leak the hidden deadline through the rendering and
+   hand back exactly the information the server works to withhold. */
+@keyframes debu-bomb-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(2deg);
+  }
+}
+
+/* The fuse is lit. A double thump like a heartbeat, then a rest — the shape is
+   what makes it read as a pulse rather than a throb.
+
+   Constant rate, like everything else on the bomb: a beat that quickened as the
+   deadline approached would hand back the very thing the server hides. */
+@keyframes debu-bomb-beat {
+  0%,
+  38%,
+  100% {
+    transform: scale(1);
+  }
+  8% {
+    transform: scale(1.1);
+  }
+  17% {
+    transform: scale(1.01);
+  }
+  25% {
+    transform: scale(1.06);
+  }
+}
+
+/* Nobody is up yet, so the arrow has no one to point at and just turns. */
+@keyframes debu-arrow-idle {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* The glow over the fuse in bomb.png. Flickers irregularly, which reads as
+   "lit" without reading as "nearly out". */
+@keyframes debu-spark {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  75% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+
+/* Handover: a small hop as a correct word passes the bomb on. */
+@keyframes debu-bomb-pass {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18) rotate(-8deg);
+  }
+  70% {
+    transform: scale(0.94) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* Detonation. Runs once, keyed on the life that was just lost. */
+@keyframes debu-bomb-blast {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  15% {
+    transform: scale(1.35);
+    filter: brightness(2.4);
+  }
+  40% {
+    transform: scale(0.8) rotate(6deg);
+    filter: brightness(1);
+  }
+  60% {
+    transform: scale(1.08) rotate(-4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes debu-blast-ring {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+
+/* The syllable swapping in on a new turn. */
+@keyframes debu-prompt-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A heart being spent. */
+@keyframes debu-heart-break {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The accepted word, flashed green under the seat that played it. */
+@keyframes debu-word-accept {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* A seat arriving at the table. */
+@keyframes debu-seat-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The winner, taking the bomb's place at the centre. */
+@keyframes debu-winner-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-12deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.14) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes debu-winner-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.12);
+  }
+}
+
+/* One beat of the pre-game countdown. */
+@keyframes debu-count-tick {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The drop-up avatar panel. */
+@keyframes debu-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* bits-ui sets data-state on the dialog overlay and content. */
 @keyframes debu-fade-in {
   from {
     opacity: 0;
@@ -98,38 +389,26 @@
   animation: debu-zoom-out 0.15s ease-in;
 }
 
-/* Rejection feedback for the word input. Defined globally rather than in the
-   component because it is applied through a Tailwind arbitrary-value class on a
-   child component's element, which Svelte's CSS scoping would not rewrite. */
-@keyframes debu-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-7px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(3px);
-  }
-}
-
-/* The bomb has no visible countdown — this is deliberate. The pulse only signals
-   "the fuse is lit", never how much of it is left. */
-@keyframes debu-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.75;
-  }
-}
+/* Reduced motion is deliberately NOT honoured, and that is a product decision.
+   
+   The bomb beating and the arrow turning are not ornament on top of the game —
+   they are how the table says whose turn it is and that the fuse is lit — and
+   the owner wants everyone to see them. Honouring the OS toggle here left the
+   arena looking broken for anyone who had switched Windows animations off,
+   which on a laptop is often a battery setting rather than a considered choice.
+   
+   The cost is real: `prefers-reduced-motion: reduce` is how people with
+   vestibular sensitivity ask for looping motion to stop, and this ignores them.
+   
+   To put it back, add:
+   
+     @media (prefers-reduced-motion: reduce) {
+       .debu-decor { animation: none !important; }
+     }
+   
+   Every purely decorative animation in the app already carries `debu-decor` —
+   the ambient loops (bomb float and beat, fuse spark, idle arrow, winner glow)
+   and the big one-shots (blast, shockwave, handover hop, seat and winner
+   entrances). Everything without that class is short, non-looping feedback that
+   means something: the shake on a rejected word, the green accept flash, the
+   heart breaking, the syllable swap, the countdown tick. Those would stay. */

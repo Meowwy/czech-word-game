@@ -130,11 +130,12 @@ where `included_files` puts them.
 
 | file | what |
 |---|---|
-| `convex/schema.ts` | `rooms`, `players`, `games` — all with indexes, all queried via `withIndex` |
+| `convex/schema.ts` | `rooms`, `players`, `games`, `typing` — all with indexes, all queried via `withIndex` |
 | `convex/rules.ts` | **pure**, no Convex imports, injected `rand` — this is where the testable logic lives |
-| `convex/turns.ts` | `roomByCode` / `playersOf` / `gameOf` / `startTurn` |
-| `convex/rooms.ts` | create, join, settings, start, leave, and the `view` query |
-| `convex/game.ts` | `submitWord` + the internal `explode` |
+| `convex/turns.ts` | `roomByCode` / `playersOf` / `seatedOf` / `gameOf` / `startTurn` / `armCountdown` |
+| `convex/rooms.ts` | `view`, `list`, enter/sit/stand, profile, heartbeat, settings, start, `autoStart`, leave |
+| `convex/game.ts` | `submitWord`, the live-draft pair `setTyping`/`typingOf`, and the internal `explode` |
+| `convex/crons.ts` | nightly sweep of rooms nobody has touched for a day |
 | `convex/prompts.data.ts` | **generated** by `npm run prompts` — do not edit |
 | `convex/_generated/` | **generated** by `npx convex dev` — committed, as Convex intends |
 | `convex/tsconfig.json` | required by Convex to typecheck the function directory |
@@ -147,15 +148,29 @@ Note `prompts.data.ts` does not appear in `convex/_generated/api.d.ts` — Conve
 filename when building the API surface. Harmless: it exports no Convex functions and is imported
 directly by `turns.ts`, so esbuild bundles it either way.
 
-Two things here are easy to break:
+Four things here are easy to break:
 
 - **`games.deadline` must never reach a client.** The hidden countdown is the core mechanic, and
   Convex queries return whole documents by default. `rooms.view` projects an explicit public shape
   that omits it. Anything new that returns a game document must do the same.
-- **`turnSeq` is what cancels the bomb.** `startTurn` schedules `explode` carrying the sequence it
-  armed with; a correct answer starts the next turn, bumping the sequence, so the pending explosion
-  arrives, sees a mismatch, and no-ops. Nothing ever cancels a scheduled job. Every path that ends
-  a turn must go through `startTurn` or bump `turnSeq` itself.
+  `rooms.countdownEndsAt` is the deliberate opposite — the *pre-game* clock is meant to be seen.
+- **`deviceId` is the only credential the game has**, and `rooms.view` must not ship anyone else's.
+  Every mutation authorises on string equality against it, so the earlier version that returned
+  whole player documents let any client play as anyone. The projection sends `isHost` / `isMe`.
+- **`turnSeq` cancels the bomb; `startSeq` cancels the countdown.** Both work the same way: the
+  scheduled job (`explode`, `autoStart`) carries the sequence it was armed with and no-ops on
+  mismatch, so nothing ever reaches into the scheduler. Every path that ends a turn must go through
+  `startTurn` or bump `turnSeq`; every path that changes who is seated must call `armCountdown`.
+- **Spectators sit at `lives: 0`.** `nextLivingSeat` / `livingSeats` must always be handed
+  `seatedOf(players)` first — an unfiltered list reads every watcher as an eliminated player and
+  ends the round the moment anyone opens the page.
+
+**The live draft is a table of its own on purpose.** `rooms.view` returns the whole player array, so
+a draft written onto `players` or `games` would invalidate that one big subscription for every
+client ~8× a second. `typing` holds one row per room behind its own two-field query, which the room
+page subscribes to alongside `view`. No SSE and no second transport: Convex's existing websocket
+already pushes it. Everyone stands up when a round ends, so `players.playedRound` — not `seated` —
+is what the results screen uses to draw the table that just played.
 
 `nextLivingSeat` deliberately returns `null` rather than wrapping onto the current holder — a lone
 survivor means the game is over, not that they pass the bomb to themselves. There is a test for it.
@@ -182,13 +197,25 @@ Import `base` from `$app/paths` and write `href="{base}/test"` / `` fetch(`${bas
 
 | path | what |
 |---|---|
-| `/` | lobby — create room / join by code |
-| `/r/[code]` | **one route** that renders lobby / playing / results off `room.state` |
+| `/` | lobby — inline room creation, live room browser, join by code |
+| `/r/[code]` | **one route** that renders waiting / playing / results off `room.state` |
 | `/test` | single-player, visible 10 s timer — the dev/QA page (was `/game`) |
 | `/word-management` | validator-comparison dashboard — the evidence for the whole approach |
 
 `/r/[code]` is one route on purpose. Separate routes plus effect-driven navigation (as in the
 pictionary project this borrows from) is where the race conditions live.
+
+**There is no name-entry modal, and entering a room always succeeds.** `enterRoom` puts you in as a
+watcher whatever the room is doing, so a shared link, a room-browser click and a refresh are the
+same action; `getNickname()` mints a guest name on first visit rather than gating on a prompt.
+Sitting down is the separate, deliberate act, and two seated players arm a *visible* 10 s countdown
+that the host can hold by opening the rules panel.
+
+Assets live in `poc/static/` (`img/bomb.png`, `img/arrow.png`, `img/avatars/*`, `fonts/*.woff2`) and
+are referenced through `` `${base}/...` `` — see `src/lib/avatars.ts`. Adding a profile picture is a
+file in `static/img/avatars/` plus a line in `AVATARS`. The one exception to the `base` rule is
+`app.css`, which hard-codes `/slovni-hra/fonts/...` because plain CSS cannot reach `$app/paths`; if
+`kit.paths.base` ever changes, that string changes with it.
 
 `src/routes/+layout.ts` sets `ssr = false` globally because Convex subscriptions are client-side;
 `/test` and `/word-management` opt back in with their own `+page.ts`, since both have server loads.
@@ -202,6 +229,10 @@ claim is "that string is a real Czech word".
 
 To close it: make `submitWord` an action that `fetch`es the check endpoint itself and calls an
 internal mutation with the verdict. ~20 lines. Deliberately not done for the MVP.
+
+`setTyping` is trusted with nothing at all: it refuses drafts from anyone but the current bomb
+holder and clamps the text to `MAX_DRAFT`, so the worst a client can do with it is show itself
+typing during its own turn.
 
 ## Non-obvious constraints
 
@@ -245,6 +276,9 @@ directory and silently falls back to defaults if it isn't there.
 
 ## Data policy
 
+- **The typeface is not part of that problem.** Fredoka is OFL (commercial use fine) and
+  self-hosted in `poc/static/fonts/` as Google's two subsets — Czech needs *both*, with `á í é` in
+  latin and `ě ř ů š č ž` in latin-ext. Dropping the ext subset silently mangles half the alphabet.
 - **Licensing is non-commercial.** MorphoDiTa/MorfFlex models are CC BY-NC-SA 4.0; hunspell `cs_CZ`
   is GPL. Going commercial means replacing the tagging oracle in `03-tag.mjs`. The repo is public,
   so this is spelled out in `NOTICE.md`; `LICENSE` is MIT for the **code only** and explicitly

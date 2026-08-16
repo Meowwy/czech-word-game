@@ -16,7 +16,7 @@
 
 <div class="flex flex-col gap-1.5">
   {#if label}
-    <span class="text-sm font-medium text-neutral-700">{label}</span>
+    <span class="text-sm font-medium text-ink-dim">{label}</span>
   {/if}
   <div
     class="inline-flex rounded-md border border-neutral-200 bg-neutral-100 p-1"
@@ -33,8 +33,8 @@
           'flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
           option.value === value
-            ? 'bg-white text-neutral-900 shadow-sm'
-            : 'text-neutral-500 hover:text-neutral-900',
+            ? 'bg-gold text-arena-edge shadow-sm'
+            : 'text-ink-faint hover:text-ink',
         )}
       >
         {option.label}

@@ -15,9 +15,9 @@
   bind:this={ref}
   bind:value
   class={cn(
-    'flex h-10 w-full min-w-0 rounded-md border border-neutral-200 bg-white px-3 py-1 text-base',
-    'shadow-xs transition-[color,box-shadow] outline-none placeholder:text-neutral-400',
-    'focus-visible:border-neutral-400 focus-visible:ring-[3px] focus-visible:ring-neutral-400/40',
+    'flex h-10 w-full min-w-0 rounded-md border border-panel-line bg-black/25 px-3 py-1 text-base',
+    'text-ink transition-[color,box-shadow] outline-none placeholder:text-ink-faint',
+    'focus-visible:border-gold-dim focus-visible:ring-[3px] focus-visible:ring-gold/25',
     'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
     className,
   )}

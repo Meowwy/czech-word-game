@@ -285,9 +285,13 @@
   /* --- entry --- */
   .entry input {
     width: 100%; box-sizing: border-box; background: #101216; border: 1px solid #303640;
-    color: inherit; border-radius: 10px; padding: .9rem 1rem; font: inherit; font-size: 1.15rem;
+    color: inherit; border-radius: 12px; padding: 1.1rem 1rem; font: inherit;
+    font-size: clamp(1.5rem, 6vw, 2rem); font-weight: 600; letter-spacing: .04em;
     text-align: center;
+    /* Presentation only — `submit()` lowercases the value before it is checked. */
+    text-transform: uppercase;
   }
+  .entry input::placeholder { text-transform: none; letter-spacing: normal; font-size: 1.1rem; }
   .entry input:focus { outline: 2px solid #3b6fd4; outline-offset: -1px; }
   .entry.shake input { border-color: #ff5f6b; animation: shake .32s; }
   @keyframes shake {

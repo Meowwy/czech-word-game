@@ -32,6 +32,7 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
   if (!ok) failed++;
 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A real word containing the prompt, found in the common list so it is certainly
 // in the acceptance list too.
@@ -48,22 +49,51 @@ const wordContaining = (sub, exclude = new Set()) => {
 
 const A = 'test-device-a';
 const B = 'test-device-b';
+const C = 'test-device-c';
+
+// `view` no longer ships anyone else's deviceId — it is the only credential the
+// game has — so the test resolves its own player ids the same way the UI does:
+// by asking as itself.
+const viewAs = (code, deviceId) => client.query('rooms:view', { code, deviceId });
+const idOf = async (code, deviceId) => (await viewAs(code, deviceId)).me._id;
+const deviceOf = (playerId, ids) => Object.keys(ids).find((d) => ids[d] === playerId);
+
 let code;
 
 try {
   console.log('room lifecycle');
-  const created = await client.mutation('rooms:createRoom', { deviceId: A, nickname: 'Pavel' });
+  const created = await client.mutation('rooms:createRoom', {
+    deviceId: A,
+    nickname: 'Pavel',
+    startingLives: 1,
+  });
   check('createRoom returns a code', created.ok && /^[A-Z]{4}$/.test(created.code), created.code);
   code = created.code;
 
-  const joined = await client.mutation('rooms:joinRoom', { code, deviceId: B, nickname: 'Katka' });
-  check('second player joins', joined.ok === true);
+  const entered = await client.mutation('rooms:enterRoom', { code, deviceId: B, nickname: 'Katka' });
+  check('a second person walks in', entered.ok === true);
 
-  const dup = await client.mutation('rooms:joinRoom', { code, deviceId: 'c', nickname: 'pavel' });
-  check('duplicate nickname is rejected', !dup.ok && dup.reason === 'nickname-taken');
+  let v = await viewAs(code, B);
+  check('the host is seated, the newcomer is watching', v.players.length === 2 && v.me.seated === false);
+  check('only the host is at the table', v.players.filter((p) => p.seated).length === 1);
 
-  const rejoin = await client.mutation('rooms:joinRoom', { code, deviceId: B, nickname: 'Katka' });
-  check('rejoining from the same device is idempotent', rejoin.ok === true);
+  const rejoin = await client.mutation('rooms:enterRoom', { code, deviceId: B, nickname: 'Katka2' });
+  check('re-entering is idempotent', rejoin.ok === true);
+  v = await viewAs(code, B);
+  check('...and carries the current nickname in', v.me.nickname === 'Katka2');
+
+  check(
+    'other players’ deviceIds never reach a client',
+    v.players.every((p) => !('deviceId' in p)),
+    `player keys: ${Object.keys(v.players[0]).join(',')}`,
+  );
+  check('the host is flagged instead', v.players.some((p) => p.isHost) && v.me.isHost === false);
+
+  console.log('\nthe public room browser');
+  const listed = await client.query('rooms:list', {});
+  const mine = listed.find((r) => r.code === code);
+  check('the new room is advertised', !!mine);
+  check('it counts players and watchers apart', mine?.seated === 1 && mine?.watching === 1);
 
   console.log('\nhost-only settings (enforced server-side, not just hidden in the UI)');
   const notHost = await client.mutation('rooms:updateSettings', {
@@ -73,14 +103,6 @@ try {
   });
   check('non-host cannot change settings', !notHost.ok && notHost.reason === 'not-host');
 
-  const setDiff = await client.mutation('rooms:updateSettings', {
-    code,
-    deviceId: A,
-    difficulty: 'hard',
-    startingLives: 2,
-  });
-  check('host can change settings', setDiff.ok === true);
-
   const badLives = await client.mutation('rooms:updateSettings', {
     code,
     deviceId: A,
@@ -88,27 +110,57 @@ try {
   });
   check('lives outside 1-5 are rejected', !badLives.ok && badLives.reason === 'lives');
 
-  let v = await client.query('rooms:view', { code });
-  check('settings landed', v.room.difficulty === 'hard' && v.room.startingLives === 2);
-  check('lobby has 2 players', v.players.length === 2);
-  check('everyone starts with the configured lives', v.players.every((p) => p.lives === 2));
-
-  await client.mutation('rooms:updateSettings', {
-    code,
-    deviceId: A,
-    difficulty: 'easy',
-    startingLives: 5,
-  });
-
   const notHostStart = await client.mutation('rooms:startGame', { code, deviceId: B });
   check('non-host cannot start the game', !notHostStart.ok && notHostStart.reason === 'not-host');
 
-  console.log('\nstarting the game');
-  const started = await client.mutation('rooms:startGame', { code, deviceId: A });
-  check('host starts the game', started.ok === true);
+  console.log('\nsitting down arms the countdown');
+  v = await viewAs(code, A);
+  check('one player is not enough to start a clock', v.room.countdownEndsAt === undefined);
 
-  v = await client.query('rooms:view', { code });
-  check('room is playing', v.room.state === 'playing');
+  const sat = await client.mutation('rooms:sitDown', { code, deviceId: B });
+  check('the watcher takes a seat', sat.ok === true && sat.waiting === false);
+
+  v = await viewAs(code, A);
+  check('two seated players arm the countdown', typeof v.room.countdownEndsAt === 'number');
+  check('the countdown end time IS public, unlike the fuse', v.room.countdownEndsAt > Date.now());
+
+  console.log('\nthe rules panel holds the clock');
+  await client.mutation('rooms:openSettings', { code, deviceId: A });
+  v = await viewAs(code, A);
+  check('opening the rules calls the countdown off', v.room.countdownEndsAt === undefined);
+  check('and says so to everyone', v.room.settingsOpen === true);
+
+  const confirmed = await client.mutation('rooms:updateSettings', {
+    code,
+    deviceId: A,
+    difficulty: 'easy',
+    startingLives: 1,
+  });
+  check('the host confirms', confirmed.ok === true);
+  v = await viewAs(code, A);
+  check('settings landed', v.room.difficulty === 'easy' && v.room.startingLives === 1);
+  check('confirming restarts the countdown', typeof v.room.countdownEndsAt === 'number');
+  check('the panel closed itself', v.room.settingsOpen === false);
+
+  console.log('\nthe countdown starting the game on its own (waiting up to 20s)');
+  const waitStart = Date.now();
+  let autoStarted = false;
+  while (Date.now() - waitStart < 20_000) {
+    await sleep(1000);
+    v = await viewAs(code, A);
+    if (v.room.state === 'playing') {
+      autoStarted = true;
+      check(
+        'the countdown dealt a round with nobody pressing start',
+        true,
+        `after ${((Date.now() - waitStart) / 1000).toFixed(1)}s`,
+      );
+      break;
+    }
+  }
+  if (!autoStarted) check('autoStart fired within 20s', false, 'scheduler may not be running');
+
+  check('the round counter advanced', v.room.round === 1);
   check('a prompt was drawn', typeof v.game.substring === 'string' && v.game.substring.length >= 2);
   check('turnSeq advanced past the placeholder', v.game.turnSeq === 1);
 
@@ -119,66 +171,106 @@ try {
     `game keys: ${Object.keys(v.game).join(',')}`,
   );
 
-  console.log('\nsubmitting words');
-  const current = v.players.find((p) => p._id === v.game.currentPlayerId);
-  const other = v.players.find((p) => p._id !== v.game.currentPlayerId);
-  check('a current player is set', !!current, current?.nickname);
+  const ids = { [A]: await idOf(code, A), [B]: await idOf(code, B) };
+  const holderDevice = deviceOf(v.game.currentPlayerId, ids);
+  const otherDevice = holderDevice === A ? B : A;
+  check('a current player is set', !!holderDevice);
 
+  console.log('\nthe live typing channel');
+  await client.mutation('game:setTyping', { code, deviceId: otherDevice, text: 'podvod' });
+  let draft = await client.query('game:typingOf', { code });
+  check(
+    'only the bomb holder may broadcast a draft',
+    !draft || draft.text !== 'podvod',
+    draft?.text,
+  );
+
+  await client.mutation('game:setTyping', { code, deviceId: holderDevice, text: 'kočk' });
+  draft = await client.query('game:typingOf', { code });
+  check('the holder’s draft reaches the table', draft?.text === 'kočk', draft?.text);
+  check('diacritics survive the round trip', draft?.text.includes('č'));
+  check('the draft is tagged with its turn', draft?.turnSeq === v.game.turnSeq);
+  check('and with who is typing it', draft?.playerId === ids[holderDevice]);
+
+  const longDraft = 'a'.repeat(200);
+  await client.mutation('game:setTyping', { code, deviceId: holderDevice, text: longDraft });
+  draft = await client.query('game:typingOf', { code });
+  check('an oversized draft is clamped', draft.text.length === 40, `${draft.text.length} chars`);
+
+  console.log('\nsubmitting words');
   const wrongTurn = await client.mutation('game:submitWord', {
     code,
-    deviceId: other.deviceId,
+    deviceId: otherDevice,
     word: wordContaining(v.game.substring),
   });
   check('the wrong player cannot submit', !wrongTurn.ok && wrongTurn.reason === 'not-your-turn');
 
   const noSub = await client.mutation('game:submitWord', {
     code,
-    deviceId: current.deviceId,
+    deviceId: holderDevice,
     word: 'xxxxxxxx',
   });
   check('a word without the prompt is rejected', !noSub.ok && noSub.reason === 'no-substring');
 
   const word = wordContaining(v.game.substring);
   check(`found a real word for "${v.game.substring}"`, !!word, word);
-  const good = await client.mutation('game:submitWord', {
-    code,
-    deviceId: current.deviceId,
-    word,
-  });
+  const good = await client.mutation('game:submitWord', { code, deviceId: holderDevice, word });
   check('valid word is accepted', good.ok === true, good.reason);
 
-  const afterHit = await client.query('rooms:view', { code });
-  check('the bomb passed to the other player', afterHit.game.currentPlayerId === other._id);
+  const afterHit = await viewAs(code, A);
+  check('the bomb passed to the other player', afterHit.game.currentPlayerId === ids[otherDevice]);
   check('turnSeq advanced', afterHit.game.turnSeq === 2);
   check(
     'a fresh prompt was drawn',
     /^[a-záčďéěíňóřšťúůýž]{2,3}$/.test(afterHit.game.substring),
     afterHit.game.substring,
   );
-  check('the score went up', afterHit.players.find((p) => p._id === current._id).words === 1);
-  check('the played word is listed as recent', afterHit.game.recentWords.includes(word));
+  check(
+    'the score went up',
+    afterHit.players.find((p) => p._id === ids[holderDevice]).words === 1,
+  );
 
-  // The used-word ban only shows itself when an already-played word happens to be
-  // valid for a later prompt. Rather than assert it on a prompt where the
-  // substring check fires first — which would pass for the wrong reason — play on
-  // until that case actually arises.
+  draft = await client.query('game:typingOf', { code });
+  check('the accepted word is left standing for the green flash', draft?.accepted === true);
+  check('...and it is the word that was played', draft?.text === word, draft?.text);
+  check('...tagged with the turn it won, not the new one', draft?.turnSeq === 1);
+
+  console.log('\njoining mid-round');
+  await client.mutation('rooms:enterRoom', { code, deviceId: C, nickname: 'Divák' });
+  const sitLate = await client.mutation('rooms:sitDown', { code, deviceId: C });
+  check('a watcher can join while a round runs', sitLate.ok === true);
+  check('...but only for the NEXT round', sitLate.waiting === true);
+  const lateView = await viewAs(code, C);
+  check('they are queued, not dealt in', lateView.me.seated === false && lateView.me.seatNext === true);
+
+  console.log('\nthe used-word ban');
+  // The ban only shows itself when an already-played word happens to be valid
+  // for a later prompt. Rather than assert it on a prompt where the substring
+  // check fires first — which would pass for the wrong reason — play on until
+  // that case actually arises.
   const used = new Set([word]);
   let banProven = false;
   let stopped = 'ran out of turns';
-  for (let turn = 0; turn < 20 && !banProven; turn++) {
-    const now = await client.query('rooms:view', { code });
+  let turn = 0;
+  for (; turn < 40 && !banProven; turn++) {
+    const now = await viewAs(code, A);
     if (now.room.state !== 'playing') {
       stopped = 'the game ended (bomb exploded through everyone)';
       break;
     }
     const sub = now.game.substring;
-    const holder = now.players.find((p) => p._id === now.game.currentPlayerId);
+    const holderId = now.game.currentPlayerId;
+    const device = deviceOf(holderId, ids);
+    if (!device) {
+      stopped = 'the bomb is held by someone this test does not control';
+      break;
+    }
 
     const alreadyPlayed = [...used].find((w) => w.includes(sub));
     if (alreadyPlayed) {
       const banned = await client.mutation('game:submitWord', {
         code,
-        deviceId: holder.deviceId,
+        deviceId: device,
         word: alreadyPlayed,
       });
       check(
@@ -195,44 +287,60 @@ try {
       stopped = `no unused common word contains "${sub}"`;
       break;
     }
-    const res = await client.mutation('game:submitWord', {
-      code,
-      deviceId: holder.deviceId,
-      word: fresh,
-    });
+    const res = await client.mutation('game:submitWord', { code, deviceId: device, word: fresh });
     if (!res.ok) {
       stopped = `submit of "${fresh}" for "${sub}" failed: ${res.reason}`;
       break;
     }
     used.add(fresh);
   }
-  if (!banProven) check('the used-word ban was exercised', false, stopped);
+  if (!banProven)
+    check(
+      'the used-word ban was exercised',
+      false,
+      `${stopped} (after ${turn} turns, ${used.size} words played: ${[...used].join(', ')})`,
+    );
 
-  console.log('\nthe scheduled bomb (waiting up to 25s for an explosion)');
-  const livesBefore = afterHit.players.reduce((n, p) => n + p.lives, 0);
+  console.log('\nthe scheduled bomb and the end of the round (waiting up to 30s)');
+  // One life each, so the first explosion ends it.
   const startedAt = Date.now();
-  let exploded = false;
-  while (Date.now() - startedAt < 25_000) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const now = await client.query('rooms:view', { code });
-    const lives = now.players.reduce((n, p) => n + p.lives, 0);
-    if (lives < livesBefore || now.room.state === 'over') {
-      exploded = true;
+  let over = false;
+  while (Date.now() - startedAt < 30_000) {
+    await sleep(1000);
+    const now = await viewAs(code, A);
+    if (now.room.state === 'over') {
+      over = true;
       check(
         'the bomb fired on its own, with no client involved',
         true,
         `after ${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
       );
+      check('a winner was recorded on the room', typeof now.room.lastWinner === 'string', now.room.lastWinner);
+      check('the game names the winner too', !!now.game.winnerId);
+      check(
+        'the players who played stand up again',
+        now.players.filter((p) => p.playedRound === now.room.round).every((p) => !p.seated),
+      );
+      check(
+        'the results screen can still find who was at the table',
+        now.players.filter((p) => p.playedRound === now.room.round).length === 2,
+      );
+      check(
+        'someone who asked for the next round is seated for it',
+        !!now.players.find((p) => p.nickname === 'Divák' && p.seated && !p.seatNext),
+      );
+      check(
+        'one seated player is not enough to restart the clock',
+        now.room.countdownEndsAt === undefined,
+      );
       break;
     }
   }
-  if (!exploded) check('the bomb fired within 25s', false, 'scheduler may not be running');
+  if (!over) check('the round ended within 30s', false, 'scheduler may not be running');
 } finally {
   if (code) {
-    await client.mutation('rooms:leaveRoom', { code, deviceId: A });
-    await client.mutation('rooms:leaveRoom', { code, deviceId: B });
-    await client.mutation('rooms:leaveRoom', { code, deviceId: 'c' });
-    const gone = await client.query('rooms:view', { code });
+    for (const d of [A, B, C]) await client.mutation('rooms:leaveRoom', { code, deviceId: d });
+    const gone = await viewAs(code, A);
     check('\ncleanup: empty room deletes itself', gone === null);
   }
 }
