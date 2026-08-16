@@ -216,10 +216,10 @@ That is the price of high recall, and exactly what the judge is there to clean u
 
 `01-fetch.mjs` downloads three files:
 
-| file          | source                                             | licence | note                                                                              |
-| ------------- | -------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
-| `cs_CZ.dic`   | [LibreOffice dictionaries](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ) — 261,167 Czech stems     | GPL     | stem = kořen slova (eg. děla-; hrad-)                                             |
-| `cs_CZ.aff`   | [the matching affix rules](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ)                           | GPL     | rules on what we can add to the stem (eg. děla**t**, děla**jí**...)               |
+| file          | source                                                                                                                         | licence | note                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------- | --------------------------------------------------------------------------------- |
+| `cs_CZ.dic`   | [LibreOffice dictionaries](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ) — 261,167 Czech stems                | GPL     | stem = kořen slova (eg. děla-; hrad-)                                             |
+| `cs_CZ.aff`   | [the matching affix rules](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ)                                      | GPL     | rules on what we can add to the stem (eg. děla**t**, děla**jí**...)               |
 | `freq_cs.txt` | [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords/tree/master/content/2018/cs) — Czech word frequencies | MIT     | precalculated frequency from a OpenSubtitles corpus — Czech film and TV subtitles |
 
 The exact download URLs, copied verbatim from the `SOURCES` array in `poc/scripts/01-fetch.mjs`:
@@ -850,21 +850,21 @@ re-typed; the licence column is summarised, with the full attribution in
 
 ## Downloaded datasets — `poc/scripts/01-fetch.mjs`
 
-| what | URL | licence |
-|---|---|---|
-| hunspell Czech stems | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.dic` | GPL |
-| hunspell affix rules | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.aff` | GPL |
-| Czech frequency list | `https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/cs/cs_full.txt` | MIT |
+| what                 | URL                                                                                              | licence |
+| -------------------- | ------------------------------------------------------------------------------------------------ | ------- |
+| hunspell Czech stems | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.dic`              | GPL     |
+| hunspell affix rules | `https://raw.githubusercontent.com/LibreOffice/dictionaries/master/cs_CZ/cs_CZ.aff`              | GPL     |
+| Czech frequency list | `https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/cs/cs_full.txt` | MIT     |
 
 Browsable: [LibreOffice/dictionaries `cs_CZ`](https://github.com/LibreOffice/dictionaries/tree/master/cs_CZ)
 · [hermitdave/FrequencyWords `cs`](https://github.com/hermitdave/FrequencyWords/tree/master/content/2018/cs)
 
 ## Web services
 
-| what | endpoint | used by | when |
-|---|---|---|---|
-| MorphoDiTa analyzer | `https://lindat.mff.cuni.cz/services/morphodita/api/analyze` | `scripts/03-tag.mjs`, `src/lib/validators/morphodita.ts` | build time, and the dashboard |
-| Korektor spellchecker | `https://lindat.mff.cuni.cz/services/korektor/api/suggestions` | `src/lib/validators/korektor.ts` | dashboard only — kept to demonstrate its failure |
+| what                  | endpoint                                                       | used by                                                  | when                                             |
+| --------------------- | -------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------ |
+| MorphoDiTa analyzer   | `https://lindat.mff.cuni.cz/services/morphodita/api/analyze`   | `scripts/03-tag.mjs`, `src/lib/validators/morphodita.ts` | build time, and the dashboard                    |
+| Korektor spellchecker | `https://lindat.mff.cuni.cz/services/korektor/api/suggestions` | `src/lib/validators/korektor.ts`                         | dashboard only — kept to demonstrate its failure |
 
 Both are free academic services from [LINDAT/CLARIAH-CZ](https://lindat.mff.cuni.cz/) at Charles
 University. **Neither is called during gameplay.** All remote calls go through
@@ -873,16 +873,16 @@ University. **Neither is called during gameplay.** All remote calls go through
 
 ## Source not used, and why
 
-| what | why not |
-|---|---|
+| what                                                                         | why not                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [MorfFlex CZ 2.1](https://lindat.mff.cuni.cz/) — 127M form-lemma-tag triples | The ideal source, but its download sits behind a licence click-through: the bitstream URL returns an HTML licence page, so it cannot be scripted. Closing the remaining 5.5 % recall gap means parsing it by hand. |
 
 ## Libraries doing the heavy lifting
 
-| package | role |
-|---|---|
-| `hunspell-reader` | expands `.dic` + `.aff` into surface forms (`scripts/02-expand.mjs`) |
-| `convex` / `convex-svelte` | multiplayer room state and reactive subscriptions |
+| package                    | role                                                                 |
+| -------------------------- | -------------------------------------------------------------------- |
+| `hunspell-reader`          | expands `.dic` + `.aff` into surface forms (`scripts/02-expand.mjs`) |
+| `convex` / `convex-svelte` | multiplayer room state and reactive subscriptions                    |
 
 ## Inspiration
 
