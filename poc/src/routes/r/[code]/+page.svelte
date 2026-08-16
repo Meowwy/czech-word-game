@@ -58,6 +58,11 @@
   );
   const tableFull = $derived(players.filter((p) => p.seated || p.seatNext).length >= MAX_PLAYERS);
 
+  // The room asks for a name before it deals you in, and nowhere else — see
+  // BottomBar. Both sit buttons read the same flag so the round-end one cannot
+  // become a way around it.
+  const named = $derived(nickname.trim().length > 0);
+
   // ── walking in ─────────────────────────────────────────────────────────────
   // Always as a watcher, never as a player. That is what lets a shared link, a
   // click in the room browser and a refresh all be the same thing, and why there
@@ -101,6 +106,29 @@
     return Math.max(0, Math.ceil((ends - now) / 1000));
   });
 
+  // ── the on-screen keyboard ─────────────────────────────────────────────────
+  // The arena is a fixed `h-dvh` shell with nothing to scroll, so a phone
+  // keyboard would simply be drawn on top of the word box at the bottom. `dvh`
+  // does not shrink for it — the visual viewport does, and the difference
+  // between the two is exactly how much of the shell is buried. Padding the
+  // shell by that much makes the flex column lay itself out inside what is
+  // still visible, which lifts the box and the footer clear of the keys.
+  let keyboardInset = $state(0);
+  $effect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const measure = () => {
+      keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    };
+    measure();
+    vv.addEventListener('resize', measure);
+    vv.addEventListener('scroll', measure);
+    return () => {
+      vv.removeEventListener('resize', measure);
+      vv.removeEventListener('scroll', measure);
+    };
+  });
+
   // ── the live draft ─────────────────────────────────────────────────────────
   // Your own keystrokes render from local state; everyone else's arrive over the
   // subscription. Waiting for your own text to come back from the server would
@@ -133,9 +161,17 @@
     const turn = game?.turnSeq ?? 0;
     const total = seats.reduce((sum, p) => sum + p.lives, 0);
     untrack(() => {
-      if (turn !== lastTurnSeq && lastTurnSeq !== 0) {
-        if (total < lastTotalLives) blastSeq += 1;
-        else passSeq += 1;
+      if (turn !== lastTurnSeq) {
+        // The word standing under a seat survives Enter, so it has to be cleared
+        // by something — and the something is the next turn. Without this, the
+        // word you last bounced would still be sitting there when the bomb came
+        // back round to you.
+        if (lastTurnSeq !== 0) {
+          if (total < lastTotalLives) blastSeq += 1;
+          else passSeq += 1;
+        }
+        myDraft = '';
+        message = '';
       }
       lastTurnSeq = turn;
       lastTotalLives = total;
@@ -171,7 +207,7 @@
     await client.mutation(api.rooms.startGame, { code, deviceId });
   }
 
-  /** Clicking anywhere in the arena hands the caret back to the hidden input. */
+  /** Clicking anywhere in the arena hands the caret back to the word box. */
   function refocus() {
     if (myTurn) document.querySelector<HTMLInputElement>('input[aria-label="tvoje slovo"]')?.focus();
   }
@@ -192,7 +228,10 @@
   <title>{code} — Debuchánkovaná</title>
 </svelte:head>
 
-<main class="debu-arena-bg flex h-dvh flex-col overflow-hidden">
+<main
+  class="debu-arena-bg flex h-dvh flex-col overflow-hidden"
+  style="padding-bottom: {keyboardInset}px"
+>
   <TopBar
     {code}
     round={room?.round ?? 0}
@@ -224,9 +263,9 @@
       settingsOpen={room.settingsOpen}
     />
 
-    <!-- The arena is the click target for the invisible input; the handler is a
+    <!-- The arena is a click target for the word box; the handler is a
          convenience for mouse users, and every path into it is also reachable by
-         keyboard, since the input already holds focus on your turn. -->
+         keyboard, since the box already holds focus on your turn. -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="relative flex flex-1 flex-col px-3 py-2" onclick={refocus}>
@@ -241,6 +280,7 @@
         <Arena
           {seats}
           currentPlayerId={game?.currentPlayerId ?? null}
+          {playing}
           substring={playing ? (game?.substring ?? '') : ''}
           startingLives={room.startingLives}
           {countdown}
@@ -256,8 +296,8 @@
             <!-- The round-end call to action, under the winner where everyone is
                  already looking. -->
             {#if showingResults && me && !me.seated && !me.seatNext}
-              <Button variant="go" size="xl" disabled={tableFull} onclick={sit}>
-                {tableFull ? 'Plno' : 'Připojit se na další kolo'}
+              <Button variant="go" size="xl" disabled={tableFull || !named} onclick={sit}>
+                {tableFull ? 'Plno' : !named ? 'Napiš si dole jméno' : 'Připojit se na další kolo'}
               </Button>
             {:else if me?.isHost && !playing && seats.length >= MIN_PLAYERS}
               <Button variant="cta" size="lg" onclick={startNow}>Spustit hned</Button>
@@ -274,6 +314,7 @@
             {deviceId}
             substring={game.substring}
             {myTurn}
+            currentName={currentPlayer?.nickname ?? ''}
             bind:draft={myDraft}
             bind:rejected={shake}
             bind:message

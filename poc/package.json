@@ -16,6 +16,7 @@
     "tag": "node --max-old-space-size=6144 scripts/03-tag.mjs",
     "filter": "node --max-old-space-size=6144 scripts/04-filter.mjs",
     "prompts": "node scripts/05-convex-prompts.mjs",
+    "avatars": "node scripts/optimize-avatars.mjs",
     "build:words": "npm run fetch && npm run expand && npm run tag && npm run filter && npm run prompts",
     "bench": "node --experimental-strip-types scripts/bench-cli.ts",
     "test": "node --experimental-strip-types scripts/test.ts && node --experimental-strip-types scripts/test-rules.ts",
@@ -38,6 +39,7 @@
     "@sveltejs/vite-plugin-svelte": "^6.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "hunspell-reader": "^10.0.1",
+    "sharp": "^0.35.3",
     "svelte": "^5.0.0",
     "tailwindcss": "^4.3.3",
     "vite": "^7.0.0"

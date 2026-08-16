@@ -20,6 +20,8 @@
     /** Players in the rotation, already ordered by seat. */
     seats: Player[];
     currentPlayerId: string | null;
+    /** A round is actually running. The bomb and the arrow exist only then. */
+    playing: boolean;
     substring: string;
     startingLives: number;
     countdown: number | null;
@@ -38,6 +40,7 @@
   let {
     seats,
     currentPlayerId,
+    playing,
     substring,
     startingLives,
     countdown,
@@ -86,15 +89,15 @@
         {substring}
         draft={spot.player._id === draftPlayerId ? draftText : ''}
         accepted={spot.player._id === draftPlayerId && draftAccepted}
-        caret={spot.player.isMe && spot.player._id === currentPlayerId}
         shake={spot.player.isMe && shake}
       />
     </div>
   {/each}
 
   <!-- The arrow is a sibling of the bomb, not a child, so it can sit behind it
-       while both stay pinned to the same centre. -->
-  {#if !winner}
+       while both stay pinned to the same centre. Neither exists before a round
+       does: an empty table is a table, not a game waiting to be photographed. -->
+  {#if playing && !winner}
     <TurnArrow {heading} />
   {/if}
 
@@ -103,8 +106,20 @@
   >
     {#if winner}
       <WinnerBadge nickname={winner.nickname} avatar={winner.avatar} mine={winner.isMe} />
-    {:else}
-      <Bomb {substring} {countdown} {passSeq} {blastSeq} />
+    {:else if playing}
+      <Bomb {substring} {passSeq} {blastSeq} />
+    {:else if countdown !== null}
+      <!-- The pre-game clock is public on purpose, but it is not the fuse, so it
+           does not borrow the bomb to show itself. -->
+      <div class="grid size-[120px] place-items-center sm:size-[140px]">
+        {#key countdown}
+          <span
+            class="font-display text-6xl leading-none font-bold text-gold [animation:debu-count-tick_0.9s_ease-out] sm:text-7xl"
+          >
+            {countdown}
+          </span>
+        {/key}
+      </div>
     {/if}
     {#if centre}
       {@render centre()}

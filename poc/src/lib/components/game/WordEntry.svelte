@@ -8,7 +8,10 @@
     deviceId: string;
     substring: string;
     myTurn: boolean;
-    /** What is in the box, read by the parent to draw your own seat instantly. */
+    /** Whose turn it is, for the disabled placeholder. */
+    currentName: string;
+    /** What is standing under your seat, read by the parent to draw it. Not the
+        same thing as what is in the box — see `boxed` below. */
     draft?: string;
     /** Set while a submission was rejected, so the seat can shake. */
     rejected?: boolean;
@@ -24,6 +27,7 @@
     deviceId,
     substring,
     myTurn,
+    currentName,
     draft = $bindable(''),
     rejected = $bindable(false),
     message = $bindable(''),
@@ -31,6 +35,12 @@
 
   const client = useConvexClient();
 
+  // Two pieces of text, deliberately: `boxed` is what is in the input, `draft`
+  // is what stands under the seat. Enter empties the box but leaves the word on
+  // the table — accepted or bounced — until the next keystroke replaces it. The
+  // box is also the only place the player's own capitalisation survives; the
+  // seat sets everything in caps and the dictionary only ever sees lowercase.
+  let boxed = $state('');
   let busy = $state(false);
   let inputEl = $state<HTMLInputElement | null>(null);
   let shakeTimer: ReturnType<typeof setTimeout>;
@@ -42,11 +52,14 @@
     'not-your-turn': 'teď je na řadě někdo jiný',
   };
 
+  /** Keep the animation and the timer that ends it on the same clock. */
+  const SHAKE_MS = 560;
+
   function reject(why: string) {
     message = why;
     rejected = true;
     clearTimeout(shakeTimer);
-    shakeTimer = setTimeout(() => (rejected = false), 340);
+    shakeTimer = setTimeout(() => (rejected = false), SHAKE_MS);
   }
 
   // ── the typing broadcast ───────────────────────────────────────────────────
@@ -73,10 +86,24 @@
     else flushTimer = setTimeout(() => send(text), wait);
   }
 
+  function type() {
+    // The first key after Enter is what clears the previous attempt, everywhere
+    // at once: locally through `draft`, and for everyone watching through the
+    // broadcast that follows it.
+    draft = boxed;
+    message = '';
+    broadcast(boxed);
+  }
+
   async function submit(event: SubmitEvent) {
     event.preventDefault();
-    const word = draft.trim().toLowerCase();
+    const typed = boxed.trim();
+    const word = typed.toLowerCase();
     if (!word || busy || !myTurn) return;
+
+    // The box empties on Enter; the word stays standing under the seat.
+    boxed = '';
+    draft = typed;
 
     // Cheap local check first, so an obvious miss costs no round trip at all.
     if (!word.includes(substring)) {
@@ -96,23 +123,18 @@
 
       if (!check.ok) {
         reject(REASONS[check.reason] ?? 'takové slovo neznám');
-        draft = '';
-        broadcast('');
         return;
       }
 
       const result = await client.mutation(api.game.submitWord, { code, deviceId, word });
       if (result.ok) {
-        // Do not broadcast the clear: submitWord has already left the accepted
-        // word standing under this seat, and an empty draft racing in behind it
-        // would wipe the green flash before anyone saw it.
+        // Do not broadcast anything here: submitWord has already left the
+        // accepted word standing under this seat, and a write racing in behind
+        // it would wipe the green flash before anyone saw it.
         clearTimeout(flushTimer);
-        draft = '';
         message = '';
       } else {
         reject(REASONS[result.reason] ?? 'nešlo to');
-        draft = '';
-        broadcast('');
       }
     } catch {
       reject('chyba spojení');
@@ -134,22 +156,40 @@
 </script>
 
 <!--
-  There is no visible text box, exactly as in the reference. The input is real
-  and focused — it takes the keystrokes and opens the on-screen keyboard on a
-  phone — but what you read is the text under your own avatar, which is the same
-  element every other player is watching. One rendering, one truth.
+  The box sits at the bottom of the arena, in the middle, and shows the word
+  exactly as it was typed. What everyone reads is still the text under the
+  avatar — set in caps with the prompt picked out in green — so the box is where
+  you write and the table is where the room watches.
 -->
-<form onsubmit={submit} class="contents">
-  <input
-    bind:this={inputEl}
-    bind:value={draft}
-    oninput={() => broadcast(draft)}
-    disabled={!myTurn}
-    autocomplete="off"
-    autocapitalize="off"
-    autocorrect="off"
-    spellcheck={false}
-    aria-label="tvoje slovo"
-    class="absolute top-0 left-0 size-px opacity-0"
-  />
+<form onsubmit={submit} class="mt-auto flex shrink-0 justify-center pt-2 pb-1">
+  <!-- The box stays put when a word bounces: it is the thing you are typing
+       into, and shaking the caret out from under someone mid-word is worse than
+       no feedback at all. The rejection is carried by the border going red here
+       and by the seat itself being knocked back over on the table. -->
+  <div
+    class={[
+      'relative w-full max-w-md rounded-card border-2 bg-black/45 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-colors',
+      rejected
+        ? 'border-danger shadow-[0_0_0_4px_rgba(255,107,94,0.25),0_8px_24px_rgba(0,0,0,0.45)]'
+        : myTurn
+          ? 'border-gold shadow-[0_0_0_4px_rgba(255,201,60,0.14),0_8px_24px_rgba(0,0,0,0.45)]'
+          : 'border-panel-line',
+    ]}
+  >
+    <input
+      bind:this={inputEl}
+      bind:value={boxed}
+      oninput={type}
+      disabled={!myTurn}
+      autocomplete="off"
+      autocapitalize="off"
+      autocorrect="off"
+      spellcheck={false}
+      enterkeyhint="send"
+      maxlength={40}
+      aria-label="tvoje slovo"
+      placeholder={myTurn ? 'piš slovo…' : `na řadě je ${currentName || '…'}`}
+      class="font-display h-12 w-full bg-transparent px-4 text-center text-xl font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink-faint disabled:cursor-not-allowed disabled:text-ink-dim sm:h-14 sm:text-2xl"
+    />
+  </div>
 </form>

@@ -26,6 +26,7 @@ npm test               # offline word-list assertions + game-rule assertions; no
 npm run test:rules     # just the game rules (fast, no 48MB index load)
 npm run test:convex    # end-to-end multiplayer against the LIVE dev deployment (network)
 npm run build:words    # rebuild the word list from scratch (~70 s, needs network)
+npm run avatars        # squash static/img/avatars/*.jpg to the size they are drawn at
 npm run bench          # full 3-way validator benchmark (~40 s, hits LINDAT)
 npm run coverage       # recall vs MorfFlex by frequency band (hits LINDAT)
 ```
@@ -207,13 +208,31 @@ pictionary project this borrows from) is where the race conditions live.
 
 **There is no name-entry modal, and entering a room always succeeds.** `enterRoom` puts you in as a
 watcher whatever the room is doing, so a shared link, a room-browser click and a refresh are the
-same action; `getNickname()` mints a guest name on first visit rather than gating on a prompt.
-Sitting down is the separate, deliberate act, and two seated players arm a *visible* 10 s countdown
-that the host can hold by opening the rules panel.
+same action. Sitting down is the separate, deliberate act, and two seated players arm a *visible*
+10 s countdown that the host can hold by opening the rules panel.
+
+**The name gates the seat, not the door.** `getNickname()` returns `''` until its owner types one —
+deliberately *not* backfilled, because a box that has already written `Host4127` in itself is a box
+nobody edits. Both sit buttons (`BottomBar`, and the round-end one in the arena's `centre` snippet)
+and `CreateRoomPanel`'s create button are disabled while it is blank; creating a room is gated too
+because `createRoom` seats the host immediately. `guestNickname` still exists in `convex/rules.ts`
+and `enterRoom` still applies it, as the safety net that keeps `players.nickname` non-empty for a
+watcher who never types — it is not meant to be seen, and if it ever appears on a seat, a gate leaked.
 
 Assets live in `poc/static/` (`img/bomb.png`, `img/arrow.png`, `img/avatars/*`, `fonts/*.woff2`) and
 are referenced through `` `${base}/...` `` — see `src/lib/avatars.ts`. Adding a profile picture is a
-file in `static/img/avatars/` plus a line in `AVATARS`. The one exception to the `base` rule is
+**square** file in `static/img/avatars/` plus a line in `AVATARS`; the pictures are photographs, so
+`avatarUrl` carries the extension and every `<img>` that shows one needs `object-cover`. Everyone is
+given a random one by `getAvatar()` on first visit and it is persisted at once, so it does not
+reshuffle per room; a remembered value that is no longer in `AVATARS` is treated as no pick and
+replaced, which is what stops an old browser showing the silhouette forever after the set is
+renumbered. "No picture" is stored as the literal `none` for exactly that reason — `''` would read
+back as "never picked".
+
+**Run `npm run avatars` after dropping a photo in.** `scripts/optimize-avatars.mjs` rewrites every
+JPEG in place at 288 px square — 96 CSS px at 3x DPR, the largest any avatar is ever drawn — which
+took the shipped set from 1.55 MB to 106 KB. It is the only thing `sharp` is a devDependency for;
+nothing at build or run time touches it. The one exception to the `base` rule is
 `app.css`, which hard-codes `/slovni-hra/fonts/...` because plain CSS cannot reach `$app/paths`; if
 `kit.paths.base` ever changes, that string changes with it.
 
@@ -252,6 +271,13 @@ typing during its own turn.
   is wrapped in `{#key game.turnSeq}` so a new turn remounts it rather than resetting state in an
   effect.
 - **Big-list scripts need `--max-old-space-size=6144`** (already in the npm scripts).
+- **Do not drive the game in a browser to check UI work.** `npm run build` is the gate; beyond
+  that, describe the change and let the owner look. Seeing a round actually play needs a second
+  seated player, which means either a second device or a throwaway Convex client — both cost far
+  more than they prove, and neither catches anything the build does not.
+- **There is no Prettier config**, so `npx prettier --write` reformats whole files to defaults it
+  does not share with the existing style (double quotes, different wrapping). Match the surrounding
+  formatting by hand instead.
 - **`$convex` is an alias** for `./convex`, configured in `svelte.config.js`.
 
 ## Deployment

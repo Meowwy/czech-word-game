@@ -4,15 +4,13 @@
   type Props = {
     /** The prompt printed on the bomb. Empty while nothing is being played. */
     substring: string;
-    /** Seconds left before the round starts, or null when no countdown is running. */
-    countdown: number | null;
     /** Bumped by the parent on every pass; drives the handover hop. */
     passSeq: number;
     /** Bumped by the parent on every detonation; drives the blast. */
     blastSeq: number;
   };
 
-  let { substring, countdown, passSeq, blastSeq }: Props = $props();
+  let { substring, passSeq, blastSeq }: Props = $props();
 </script>
 
 <div class="relative grid size-[120px] place-items-center sm:size-[140px]">
@@ -58,29 +56,13 @@
                 class="size-[120px] drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)] sm:size-[140px]"
               />
 
-              <!-- A glow pinned over the spark drawn into bomb.png. It flickers
-                   at a constant rate: anything that sped up as the fuse burned
-                   would leak the hidden deadline. -->
-              <span
-                class="debu-decor pointer-events-none absolute top-[13%] left-[85%] size-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,214,102,0.95)_0%,rgba(255,150,40,0.5)_45%,transparent_70%)] [animation:debu-spark_1.1s_ease-in-out_infinite]"
-                aria-hidden="true"
-              ></span>
-
               <!-- The sphere in bomb.png is not centred in its own box — the
                    fuse pushes it down and left — so the label is placed on the
                    ball, not on the image. -->
               <div
                 class="pointer-events-none absolute top-[57%] left-[43%] flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
               >
-                {#if countdown !== null}
-                  {#key countdown}
-                    <span
-                      class="font-display text-4xl leading-none font-bold text-gold [animation:debu-count-tick_0.9s_ease-out] sm:text-5xl"
-                    >
-                      {countdown}
-                    </span>
-                  {/key}
-                {:else if substring}
+                {#if substring}
                   {#key substring}
                     <span
                       class="font-display text-2xl leading-none font-bold tracking-wide text-ink uppercase [animation:debu-prompt-in_0.3s_ease-out] sm:text-[28px]"

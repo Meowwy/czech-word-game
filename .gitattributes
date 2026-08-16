@@ -13,4 +13,9 @@
 poc/data/*.txt -text
 poc/data/*.tsv -text
 
+# The avatar set is photographs; `text=auto` would detect these anyway, but the
+# one file in this repo that must never be transformed is spelled out above, so
+# the images are spelled out too rather than left to detection.
 *.png binary
+*.jpg binary
+*.jpeg binary

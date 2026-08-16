@@ -25,10 +25,7 @@
     draft: string;
     /** The draft is a word that was just accepted — flash it green. */
     accepted: boolean;
-    /** Draw a caret after the text. Only ever true on your own seat, on your
-        turn — it is the only sign that the invisible input has focus. */
-    caret?: boolean;
-    /** The last submission bounced; shake the text. */
+    /** The last submission bounced; shake the seat. */
     shake?: boolean;
   };
 
@@ -39,7 +36,6 @@
     substring,
     draft,
     accepted,
-    caret = false,
     shake = false,
   }: Props = $props();
 
@@ -48,8 +44,8 @@
   // Split the draft around the prompt so the letters that earn the word are the
   // ones that stand out — green the instant the prompt appears anywhere in the
   // draft, which is the only feedback that the word is on track before Enter.
-  // This is the same view every player gets, including the typist — the real
-  // <input> is invisible, so this text *is* the input.
+  // The typist reads this too: the box at the bottom of the screen keeps their
+  // own capitalisation, the table shows the shared, shoutable version.
   const parts = $derived.by(() => {
     if (!draft) return [];
     const at = substring ? draft.toLowerCase().indexOf(substring.toLowerCase()) : -1;
@@ -85,58 +81,67 @@
   });
 </script>
 
+<!-- Two wrappers, because two one-shot animations have to be able to run over
+     each other: arriving at the table, and being knocked back by a word that
+     bounced. One element would mean the second transform replacing the first. -->
 <div
-  class="debu-decor flex w-28 flex-col items-center gap-1 [animation:debu-seat-in_0.35s_ease-out] sm:w-32"
+  class="debu-decor w-28 [animation:debu-seat-in_0.35s_ease-out] sm:w-32"
   class:opacity-45={out}
 >
-  <p
-    class="font-display flex max-w-full items-center gap-1 truncate text-base leading-tight font-semibold sm:text-lg"
-    class:text-gold={current}
-    class:text-ink={!current}
-    class:line-through={out}
+  <div
+    class="flex flex-col items-center gap-1"
+    class:animate-[debu-shake_0.56s_cubic-bezier(0.36,0.07,0.19,0.97)]={shake}
   >
-    {#if player.isHost}
-      <CrownIcon class="size-3.5 shrink-0 text-gold-dim" aria-label="zakladatel" />
-    {/if}
-    <span class="truncate">{player.nickname}</span>
-  </p>
+    <p
+      class="font-display flex max-w-full items-center gap-1 truncate text-base leading-tight font-semibold sm:text-lg"
+      class:text-gold={current}
+      class:text-ink={!current}
+      class:line-through={out}
+    >
+      {#if player.isHost}
+        <CrownIcon class="size-3.5 shrink-0 text-gold-dim" aria-label="zakladatel" />
+      {/if}
+      <span class="truncate">{player.nickname}</span>
+    </p>
 
-  <div class="relative">
-    <img
-      src={avatarUrl(player.avatar)}
-      alt=""
-      width="64"
-      height="64"
-      class={[
-        'size-16 rounded-md object-cover ring-2 transition-all duration-200 sm:size-[72px]',
-        current ? 'ring-gold shadow-[0_0_24px_-2px_var(--color-gold)]' : 'ring-white/10',
-        out && 'grayscale',
-      ]}
-    />
-    <span class="absolute -top-2.5 left-1/2 -translate-x-1/2">
-      <Hearts lives={player.lives} max={startingLives} {breaking} />
-    </span>
+    <div class="relative">
+      <img
+        src={avatarUrl(player.avatar)}
+        alt=""
+        width="64"
+        height="64"
+        class={[
+          'size-16 rounded-md object-cover ring-2 transition-all duration-200 sm:size-[72px]',
+          current ? 'ring-gold shadow-[0_0_24px_-2px_var(--color-gold)]' : 'ring-white/10',
+          out && 'grayscale',
+        ]}
+      />
+      <span class="absolute -top-2.5 left-1/2 -translate-x-1/2">
+        <Hearts lives={player.lives} max={startingLives} {breaking} />
+      </span>
+    </div>
+
+    <!-- Reserved height, so a seat does not jump when someone starts typing.
+         Set in caps and a size up from the name above it: this is what the
+         whole room reads, so it has to be the most legible thing on the seat.
+         It holds the last word tried — accepted or bounced — until its author
+         starts typing the next one. `uppercase` is presentation only; the
+         value handed to the dictionary and to `submitWord` is lowercased at
+         submit time.
+
+         The word going green *is* the accepted feedback. A glow behind it was
+         tried and taken back out: at seat size it read as a splash rather than
+         as a word being approved. -->
+    <p
+      class="relative min-h-8 max-w-[11rem] text-center font-display text-xl leading-8 font-bold tracking-wide break-all uppercase transition-colors sm:text-2xl"
+      class:text-go={accepted}
+      class:animate-[debu-word-accept_0.4s_ease-out]={accepted}
+      class:text-danger={shake}
+      class:text-ink={!accepted && !shake}
+    >
+      {#each parts as part, i (i)}<span class={part.hit && !accepted && !shake ? 'text-go' : ''}
+          >{part.text}</span
+        >{/each}
+    </p>
   </div>
-
-  <!-- Reserved height, so a seat does not jump every time someone starts typing.
-       Set in caps and a size up from the name above it: this text is the input —
-       there is no visible box — so it has to be the most legible thing on the
-       seat, readable across the table by everyone watching. `uppercase` is
-       presentation only; the bound value stays lowercase, which is what the
-       dictionary lookup and `submitWord` expect. -->
-  <p
-    class="min-h-8 max-w-[11rem] text-center font-display text-xl leading-8 font-bold tracking-wide break-all uppercase sm:text-2xl"
-    class:text-go={accepted}
-    class:animate-[debu-word-accept_0.4s_ease-out]={accepted}
-    class:animate-[debu-shake_0.34s]={shake}
-    class:text-danger={shake}
-    class:text-ink={!accepted && !shake}
-  >
-    {#each parts as part, i (i)}<span class={part.hit && !accepted ? 'text-go' : ''}
-        >{part.text}</span
-      >{/each}{#if caret}<span
-        class="ml-0.5 inline-block w-0.5 animate-pulse bg-gold align-middle text-transparent"
-        aria-hidden="true">|</span
-      >{/if}
-  </p>
 </div>

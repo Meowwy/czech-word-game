@@ -33,9 +33,15 @@
 }
 
 /* ───────────────────────────── design tokens ─────────────────────────────
-   The palette is the game's identity: a warm, lamp-lit brown arena with one
+   The palette is the game's identity: a cool, lamp-lit slate arena with one
    violet band of chrome across the top, gold for the bomb and the arrow, and
    green reserved for the single action that matters — sitting down to play.
+
+   The neutrals are the single-player page's `#14161a` and its family, lifted
+   into a three-stop ramp so the floor still has a pool of light on it. Anything
+   that reads as *surface* — the floor, the panels, their borders, muted type —
+   belongs to that ramp; the accents above stay exactly as they were, because
+   the arena changing colour is not a reason for the bomb to.
 
    Unlike the shadcn tokens these replace, these are actually used. Components
    reference `bg-arena-edge` / `text-gold`, never a literal `neutral-200`, so
@@ -44,22 +50,22 @@
   --font-display: 'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif;
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* arena */
-  --color-arena-core: #5a4433;
-  --color-arena-mid: #3a2a20;
-  --color-arena-edge: #1a1210;
+  /* arena — the edge is the single-player page's background, exactly */
+  --color-arena-core: #39414f;
+  --color-arena-mid: #22262e;
+  --color-arena-edge: #14161a;
 
   /* chrome */
   --color-bar: #6a45c4;
   --color-bar-dark: #533398;
   --color-bar-fg: #f1e9ff;
-  --color-panel: #2a1e18;
-  --color-panel-line: #4a382c;
+  --color-panel: #1b1e24;
+  --color-panel-line: #2f353f;
 
   /* type */
-  --color-ink: #f6efe6;
-  --color-ink-dim: #bda995;
-  --color-ink-faint: #a08d7c;
+  --color-ink: #eceff4;
+  --color-ink-dim: #a7b0bd;
+  --color-ink-faint: #7c8593;
 
   /* accents */
   --color-gold: #ffc93c;
@@ -67,7 +73,7 @@
   --color-go: #3fbf62;
   --color-go-dark: #2f9a4c;
   --color-heart: #ff5c78;
-  --color-heart-out: #4a382c;
+  --color-heart-out: #2f353f;
   --color-danger: #ff6b5e;
 
   --radius-card: 0.75rem;
@@ -92,7 +98,9 @@
 }
 
 /* The lamp-lit floor. One element carries both the pool of light and the
-   vignette, so the arena can be any aspect ratio without a visible seam. */
+   vignette, so the arena can be any aspect ratio without a visible seam. The
+   gradient is the point — flat `--color-arena-edge` is what `html` and `body`
+   get, and the difference between the two is the lamp. */
 .debu-arena-bg {
   background:
     radial-gradient(
@@ -110,23 +118,40 @@
    classes on *child* components' elements, which Svelte's CSS scoping would
    not rewrite. */
 
-/* Rejection feedback for the word input. */
+/* Rejection feedback, run on the whole seat and on the word box at once. It has
+   to be readable across the room on someone else's screen, so it is a wide,
+   decaying wobble with a tilt and a swell in it — a few pixels of horizontal
+   jitter reads as a rendering glitch rather than as "no". */
 @keyframes debu-shake {
-  0%,
+  0% {
+    transform: translateX(0) rotate(0deg) scale(1);
+  }
+  10% {
+    transform: translateX(-16px) rotate(-3.5deg) scale(1.04);
+  }
+  22% {
+    transform: translateX(15px) rotate(3.5deg) scale(1.04);
+  }
+  34% {
+    transform: translateX(-12px) rotate(-2.6deg) scale(1.03);
+  }
+  46% {
+    transform: translateX(10px) rotate(2deg) scale(1.02);
+  }
+  58% {
+    transform: translateX(-7px) rotate(-1.4deg) scale(1.01);
+  }
+  70% {
+    transform: translateX(5px) rotate(0.9deg) scale(1);
+  }
+  82% {
+    transform: translateX(-3px) rotate(-0.4deg) scale(1);
+  }
+  91% {
+    transform: translateX(2px) rotate(0deg) scale(1);
+  }
   100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-7px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(3px);
+    transform: translateX(0) rotate(0deg) scale(1);
   }
 }
 
@@ -173,28 +198,6 @@
   }
   to {
     transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-/* The glow over the fuse in bomb.png. Flickers irregularly, which reads as
-   "lit" without reading as "nearly out". */
-@keyframes debu-spark {
-  0%,
-  100% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  30% {
-    opacity: 0.45;
-    transform: scale(0.82);
-  }
-  55% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-  75% {
-    opacity: 0.6;
-    transform: scale(0.95);
   }
 }
 
@@ -407,7 +410,7 @@
      }
    
    Every purely decorative animation in the app already carries `debu-decor` —
-   the ambient loops (bomb float and beat, fuse spark, idle arrow, winner glow)
+   the ambient loops (bomb float and beat, idle arrow, winner glow)
    and the big one-shots (blast, shockwave, handover hop, seat and winner
    entrances). Everything without that class is short, non-looping feedback that
    means something: the shake on a rejected word, the green accept flash, the
