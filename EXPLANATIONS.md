@@ -384,6 +384,25 @@ records _both_ classifications separately and leaves the decision to the next st
 Why? Because tagging costs 34 seconds of API calls and filtering costs 12 seconds of local CPU.
 Recording both means changing policy on proper nouns is a re-filter, not a re-tag.
 
+A second file, `data/analyses.tsv`, records **every** analysis in full:
+
+```
+Praha          Praha_;G|NNFS1-----A----
+Novák          Novák_;Y|NNMS1-----A----
+šalina         šalina_,l|NNFS1-----A----
+nejkrásnější   krásný|AAFP1----3A----  krásný|AAFP4----3A----  … (27 analyses)
+```
+
+The 15-position PDT tag carries gender, number, case, person, tense, degree, negation, voice and
+aspect; the lemma carries the proper-noun class (`_;Y` surname, `_;G` geography) and style markers
+(`_,l` colloquial, `_,h` bookish). Nothing in the pipeline reads this yet — it exists because the
+API round-trip is the expensive part, and discarding the detail means paying for it again later.
+
+It is a separate file rather than extra columns for a concrete reason: the analyses are ~8x the
+bulk, which would take `tagged.tsv` to roughly 587 MB. `04-filter.mjs` reads that file with
+`readFileSync(..., 'utf8')`, and V8 caps a single string at ~537 MB — one combined file would
+throw there. Splitting leaves that consumer untouched.
+
 > **Principle: store observations, not verdicts.** The expensive stage should record what it _saw_
 > in as raw a form as is practical; the cheap stage applies the policy. Bake a decision into
 > expensive data and every future change to that decision costs you the expensive stage again.
