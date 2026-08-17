@@ -71,10 +71,13 @@ export const view = query({
         code: room.code,
         name: room.name,
         state: room.state,
-        difficulty: room.difficulty,
         startingLives: room.startingLives,
         round: room.round,
         settingsOpen: room.settingsOpen,
+        // `difficulty` is deliberately not listed here — `roomRules` carries it,
+        // and naming it twice in one literal is a TS2783 error. Convex typechecks
+        // this directory on `deploy`, so that lands as a failed build rather than
+        // a failed request.
         // The host's rules, defaults already applied, so the panel and the
         // status line never have to know what an unset field meant.
         ...roomRules(room),
