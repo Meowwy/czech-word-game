@@ -6,9 +6,16 @@
   type Props = {
     /** Where the current player sits, in seatAngle degrees. Null hides the arrow. */
     heading: number | null;
+    /**
+     * How wide to draw it, in px — the arena hands down a share of the ring
+     * radius. It used to be a share of the box width, which is the wrong thing
+     * to measure: the arrow has to be shorter than the distance to a seat, and
+     * on a wide, short table those two numbers pull in opposite directions.
+     */
+    size: number;
   };
 
-  let { heading }: Props = $props();
+  let { heading, size }: Props = $props();
 
   /** arrow.png is drawn pointing left, so an unrotated arrow already means 180°. */
   const ARROW_REST_DEG = 180;
@@ -40,14 +47,15 @@
     src={ARROW_URL}
     alt=""
     aria-hidden="true"
-    class="debu-decor pointer-events-none absolute top-1/2 left-1/2 w-[min(46%,340px)] origin-center opacity-70 drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] [animation:debu-arrow-idle_5s_linear_infinite]"
+    class="debu-decor pointer-events-none absolute top-1/2 left-1/2 origin-center opacity-70 drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] [animation:debu-arrow-idle_5s_linear_infinite]"
+    style="width: {size}px"
   />
 {:else}
   <img
     src={ARROW_URL}
     alt=""
     aria-hidden="true"
-    class="pointer-events-none absolute top-1/2 left-1/2 w-[min(46%,340px)] origin-center drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transition-transform duration-[420ms] ease-[cubic-bezier(0.34,1.3,0.64,1)]"
-    style="transform: translate(-50%, -50%) rotate({angle}deg)"
+    class="pointer-events-none absolute top-1/2 left-1/2 origin-center drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transition-transform duration-[420ms] ease-[cubic-bezier(0.34,1.3,0.64,1)]"
+    style="width: {size}px; transform: translate(-50%, -50%) rotate({angle}deg)"
   />
 {/if}

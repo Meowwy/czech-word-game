@@ -112,6 +112,76 @@
     var(--color-arena-edge);
 }
 
+/* ───────────────────────────── rules panel controls ─────────────────────────
+   A range input cannot be styled through Tailwind utilities: the track and the
+   thumb are vendor pseudo-elements, and `::-webkit-slider-thumb` needs its own
+   `appearance:none` before any of it takes. Two rules per browser, once, here.
+
+   `accent-color` alone was tried first — it recolours the thumb and the filled
+   track for free — but it leaves the bar at the browser's own height, which
+   next to Fredoka and the panel's flat dark strips reads as a control borrowed
+   from another program. */
+.debu-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-panel-line);
+  outline: none;
+}
+.debu-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-ink-dim);
+  border: 2px solid var(--color-panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.debu-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-ink-dim);
+  border: 2px solid var(--color-panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.debu-range:hover:not(:disabled)::-webkit-slider-thumb {
+  background: var(--color-ink);
+}
+.debu-range:hover:not(:disabled)::-moz-range-thumb {
+  background: var(--color-ink);
+}
+.debu-range:disabled {
+  opacity: 0.45;
+}
+.debu-range:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+/* Native selects keep their own arrow — the one thing about them that is
+   already right on every platform — and `color-scheme: dark` is what makes the
+   dropdown the OS opens match the panel it came out of. Without it Windows
+   draws a white listbox over the dark arena. */
+.debu-select {
+  color-scheme: dark;
+}
+
+/* The panel slides in from the edge it is anchored to. */
+@keyframes debu-panel-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 /* ───────────────────────────── motion ─────────────────────────────
    Everything below is prefixed `debu-` and lives here rather than in a
    component because several are applied through Tailwind arbitrary-value
@@ -169,24 +239,79 @@
   }
 }
 
-/* The fuse is lit. A double thump like a heartbeat, then a rest — the shape is
-   what makes it read as a pulse rather than a throb.
+/* The fuse is lit and short. Replaces the float for the whole of a round: the
+   bomb plants itself and twitches, which reads as "about to go" in a way a
+   drifting object never does. Small on purpose — 3% and a hair of brightness —
+   because it runs for the entire turn and anything larger becomes wallpaper.
 
-   Constant rate, like everything else on the bomb: a beat that quickened as the
-   deadline approached would hand back the very thing the server hides. */
-@keyframes debu-bomb-beat {
+   Constant rate, like every other animation on the bomb. A pulse that quickened
+   as the deadline approached would hand back the hidden fuse through the
+   rendering, which is the one thing none of this may do. */
+@keyframes debu-bomb-tick {
   0%,
-  38%,
   100% {
     transform: scale(1);
+    filter: brightness(1);
   }
-  8% {
-    transform: scale(1.1);
+  50% {
+    transform: scale(1.03);
+    filter: brightness(1.12);
   }
-  17% {
-    transform: scale(1.01);
+}
+
+/* The wordmark, on an empty table. A slow party sway — the room is waiting, so
+   the only thing moving is the sign. */
+@keyframes debu-logo-sway {
+  0%,
+  100% {
+    transform: rotate(-2.5deg) translateY(0);
   }
-  25% {
+  50% {
+    transform: rotate(-1.2deg) translateY(-6px);
+  }
+}
+
+/* BUCH is the bang in the middle of the name, so it arrives like one. */
+@keyframes debu-logo-bang {
+  0% {
+    transform: scale(0.2) rotate(-14deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.22) rotate(4deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.94) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(-1.5deg);
+    opacity: 1;
+  }
+}
+
+@keyframes debu-logo-in {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* The gold behind BUCH, breathing. Purely decorative, so it carries
+   `debu-decor` like every other ambient loop — see the note at the foot of this
+   file. */
+@keyframes debu-logo-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
     transform: scale(1.06);
   }
 }
@@ -394,7 +519,7 @@
 
 /* Reduced motion is deliberately NOT honoured, and that is a product decision.
    
-   The bomb beating and the arrow turning are not ornament on top of the game —
+   The bomb twitching and the arrow turning are not ornament on top of the game —
    they are how the table says whose turn it is and that the fuse is lit — and
    the owner wants everyone to see them. Honouring the OS toggle here left the
    arena looking broken for anyone who had switched Windows animations off,
@@ -410,7 +535,7 @@
      }
    
    Every purely decorative animation in the app already carries `debu-decor` —
-   the ambient loops (bomb float and beat, idle arrow, winner glow)
+   the ambient loops (bomb float and tick, idle arrow, winner glow, the wordmark)
    and the big one-shots (blast, shockwave, handover hop, seat and winner
    entrances). Everything without that class is short, non-looping feedback that
    means something: the shake on a rejected word, the green accept flash, the

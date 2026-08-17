@@ -4,23 +4,34 @@
   type Props = {
     /** The prompt printed on the bomb. Empty while nothing is being played. */
     substring: string;
+    /**
+     * A round is running. The bomb stops drifting and starts twitching: an
+     * object that hangs in the air reads as an ornament, and the moment the fuse
+     * is lit it has to read as a thing about to go off. See `debu-bomb-tick` —
+     * the rate is constant either way, because a pulse that quickened with the
+     * deadline would leak the hidden fuse.
+     */
+    playing?: boolean;
     /** Bumped by the parent on every pass; drives the handover hop. */
     passSeq: number;
     /** Bumped by the parent on every detonation; drives the blast. */
     blastSeq: number;
   };
 
-  let { substring, passSeq, blastSeq }: Props = $props();
+  let { substring, playing = false, passSeq, blastSeq }: Props = $props();
 </script>
 
-<div class="relative grid size-[120px] place-items-center sm:size-[140px]">
+<!-- One size, set once and inherited: the bomb, the shockwave ring, the twitch
+     box and the image itself all have to agree, and four copies of the same two
+     numbers is four places to miss when it changes. -->
+<div class="relative grid size-[var(--bomb)] place-items-center [--bomb:104px] sm:[--bomb:120px]">
   <!-- The shockwave. Keyed so each detonation gets a fresh element and replays
        the animation; without the key the class is already applied and nothing
        moves on the second explosion. -->
   {#key blastSeq}
     {#if blastSeq > 0}
       <span
-        class="debu-decor pointer-events-none absolute size-[120px] rounded-full border-4 border-gold [animation:debu-blast-ring_0.7s_ease-out_forwards] sm:size-[140px]"
+        class="debu-decor pointer-events-none absolute size-[var(--bomb)] rounded-full border-4 border-gold [animation:debu-blast-ring_0.7s_ease-out_forwards]"
         aria-hidden="true"
       ></span>
     {/if}
@@ -39,21 +50,25 @@
           class="debu-decor grid place-items-center"
           class:animate-[debu-bomb-pass_0.45s_cubic-bezier(0.34,1.56,0.64,1)]={passSeq > 0}
         >
-          <!-- Float and beat are separate elements: they run at different
-               tempos and would overwrite each other's transform if they shared
-               one. -->
+          <!-- Two elements rather than one because the ambient motion and the
+               one-shots run on different schedules and would overwrite each
+               other's transform if they shared an element. The outer one is the
+               idle drift and exists only before a round: once the fuse is lit
+               the bomb is planted, and all that is left is the twitch below. -->
           <div
-            class="debu-decor grid place-items-center [animation:debu-bomb-float_3.6s_ease-in-out_infinite]"
+            class="debu-decor grid place-items-center"
+            class:animate-[debu-bomb-float_3.6s_ease-in-out_infinite]={!playing}
           >
             <div
-              class="debu-decor relative grid size-[120px] place-items-center [animation:debu-bomb-beat_1.4s_ease-in-out_infinite] sm:size-[140px]"
+              class="debu-decor relative grid size-[var(--bomb)] place-items-center"
+              class:animate-[debu-bomb-tick_0.42s_ease-in-out_infinite]={playing}
             >
               <img
                 src={BOMB_URL}
                 alt=""
                 width="120"
                 height="120"
-                class="size-[120px] drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)] sm:size-[140px]"
+                class="size-[var(--bomb)] drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)]"
               />
 
               <!-- The sphere in bomb.png is not centred in its own box — the
@@ -65,7 +80,7 @@
                 {#if substring}
                   {#key substring}
                     <span
-                      class="font-display text-2xl leading-none font-bold tracking-wide text-ink uppercase [animation:debu-prompt-in_0.3s_ease-out] sm:text-[28px]"
+                      class="font-display text-xl leading-none font-bold tracking-wide text-ink uppercase [animation:debu-prompt-in_0.3s_ease-out] sm:text-2xl"
                     >
                       {substring}
                     </span>

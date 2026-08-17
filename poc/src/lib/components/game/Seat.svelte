@@ -25,8 +25,12 @@
     draft: string;
     /** The draft is a word that was just accepted — flash it green. */
     accepted: boolean;
+    /** The bomb went off on this text — leave it standing, struck through. */
+    failed?: boolean;
     /** The last submission bounced; shake the seat. */
     shake?: boolean;
+    /** At the table that just played, but not dealt into the next round. */
+    dim?: boolean;
   };
 
   let {
@@ -36,7 +40,9 @@
     substring,
     draft,
     accepted,
+    failed = false,
     shake = false,
+    dim = false,
   }: Props = $props();
 
   const out = $derived(player.lives <= 0);
@@ -85,8 +91,8 @@
      each other: arriving at the table, and being knocked back by a word that
      bounced. One element would mean the second transform replacing the first. -->
 <div
-  class="debu-decor w-28 [animation:debu-seat-in_0.35s_ease-out] sm:w-32"
-  class:opacity-45={out}
+  class="debu-decor w-28 [animation:debu-seat-in_0.35s_ease-out] transition-opacity sm:w-32"
+  class:opacity-45={out || dim}
 >
   <div
     class="flex flex-col items-center gap-1"
@@ -124,8 +130,9 @@
     <!-- Reserved height, so a seat does not jump when someone starts typing.
          Set in caps and a size up from the name above it: this is what the
          whole room reads, so it has to be the most legible thing on the seat.
-         It holds the last word tried — accepted or bounced — until its author
-         starts typing the next one. `uppercase` is presentation only; the
+         It holds the last word tried — accepted, bounced, or caught by the
+         bomb — until its author starts typing the next one. `uppercase` is
+         presentation only; the
          value handed to the dictionary and to `submitWord` is lowercased at
          submit time.
 
@@ -136,11 +143,14 @@
       class="relative min-h-8 max-w-[11rem] text-center font-display text-xl leading-8 font-bold tracking-wide break-all uppercase transition-colors sm:text-2xl"
       class:text-go={accepted}
       class:animate-[debu-word-accept_0.4s_ease-out]={accepted}
-      class:text-danger={shake}
-      class:text-ink={!accepted && !shake}
+      class:text-danger={shake || failed}
+      class:line-through={failed}
+      class:decoration-2={failed}
+      class:opacity-70={failed}
+      class:text-ink={!accepted && !shake && !failed}
     >
-      {#each parts as part, i (i)}<span class={part.hit && !accepted && !shake ? 'text-go' : ''}
-          >{part.text}</span
+      {#each parts as part, i (i)}<span
+          class={part.hit && !accepted && !shake && !failed ? 'text-go' : ''}>{part.text}</span
         >{/each}
     </p>
   </div>

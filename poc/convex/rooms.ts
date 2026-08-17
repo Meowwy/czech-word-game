@@ -1,13 +1,19 @@
 import { v } from 'convex/values';
 import type { Doc } from './_generated/dataModel';
 import { internalMutation, mutation, query, type MutationCtx } from './_generated/server';
-import { difficulty as difficultyValidator } from './schema';
 import {
-  armCountdown,
+  difficulty as difficultyValidator,
+  turnRange as turnRangeValidator,
+} from './schema';
+import {
+  beginCountdown,
+  cancelCountdown,
   clearTyping,
   gameOf,
+  holdCountdown,
   playersOf,
   roomByCode,
+  roomRules,
   seatedOf,
   startTurn,
   typingRow,
@@ -17,14 +23,21 @@ import {
   MAX_LIVES,
   MAX_OCCUPANTS,
   MAX_PLAYERS,
+  MAX_PROMPT_AGE,
+  MAX_TURN_FLOOR_MS,
   MIN_LIVES,
   MIN_PLAYERS,
+  MIN_PROMPT_AGE,
+  MIN_TURN_FLOOR_MS,
   ROOM_LIST_TTL_MS,
   ROOM_SWEEP_MS,
   guestNickname,
   isValidCode,
   makeCode,
   normalizeNickname,
+  normalizeRoomName,
+  sameNickname,
+  uniqueNickname,
 } from './rules';
 
 const DEFAULT_LIVES = 3;
@@ -56,11 +69,15 @@ export const view = query({
     return {
       room: {
         code: room.code,
+        name: room.name,
         state: room.state,
         difficulty: room.difficulty,
         startingLives: room.startingLives,
         round: room.round,
         settingsOpen: room.settingsOpen,
+        // The host's rules, defaults already applied, so the panel and the
+        // status line never have to know what an unset field meant.
+        ...roomRules(room),
         // Public on purpose, unlike the fuse: a start you cannot see coming is
         // an ambush, and the host needs the same clock everyone else has.
         countdownEndsAt: room.countdownEndsAt,
@@ -96,6 +113,11 @@ export const view = query({
             currentPlayerId: game.currentPlayerId,
             substring: game.substring,
             usedCount: game.usedWords.length,
+            // Only once the round is over. During play this array grows by one
+            // on every correct answer, and `view` is the one big subscription
+            // every client in the room holds — shipping the whole list on each
+            // word would put the round's history on the wire dozens of times.
+            usedWords: room.state === 'over' ? game.usedWords : undefined,
             startedAt: game._creationTime,
             winnerId: game.winnerId,
           }
@@ -133,6 +155,7 @@ export const list = query({
       if (players.length === 0) continue;
       out.push({
         code: room.code,
+        name: room.name,
         state: room.state,
         difficulty: room.difficulty,
         startingLives: room.startingLives,
@@ -166,15 +189,22 @@ async function pruneGhosts(ctx: MutationCtx, room: Doc<'rooms'>): Promise<void> 
 export const createRoom = mutation({
   args: {
     deviceId: v.string(),
-    nickname: v.string(),
+    /** The room's name, not the host's. Blank is fine — see `roomTitle`. */
+    name: v.optional(v.string()),
+    /** Whatever name this device already remembers. Blank means "not yet named". */
+    nickname: v.optional(v.string()),
     avatar: v.optional(v.string()),
     difficulty: v.optional(difficultyValidator),
     startingLives: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Nobody is stopped at a name prompt on the way into a game; an empty box
-    // becomes a guest name rather than an error.
-    const nickname = normalizeNickname(args.nickname) || guestNickname();
+    // The lobby asks for the *room's* name now, so the host may arrive without
+    // one of their own. A seat needs a name — that rule has not moved — so an
+    // unnamed host walks in watching and sits from the bottom bar like anybody
+    // else. Only a device that already remembers a name is seated on the spot.
+    const named = normalizeNickname(args.nickname ?? '');
+    const nickname = named || guestNickname();
+    const roomName = normalizeRoomName(args.name ?? '');
 
     const lives = args.startingLives ?? DEFAULT_LIVES;
     if (lives < MIN_LIVES || lives > MAX_LIVES) return { ok: false as const, reason: 'lives' };
@@ -191,6 +221,7 @@ export const createRoom = mutation({
     const now = Date.now();
     const roomId = await ctx.db.insert('rooms', {
       code,
+      name: roomName || undefined,
       hostDeviceId: args.deviceId,
       state: 'lobby',
       difficulty: args.difficulty ?? 'medium',
@@ -201,17 +232,18 @@ export const createRoom = mutation({
       settingsOpen: false,
       lastActivityAt: now,
     });
-    // Whoever opens a room means to play in it.
+    // Whoever opens a room means to play in it — but a watcher sits at `lives: 0`
+    // and an unnamed host is a watcher, so the two fields move together.
     await ctx.db.insert('players', {
       roomId,
       deviceId: args.deviceId,
       nickname,
       avatar: args.avatar,
-      seated: true,
+      seated: named !== '',
       seatNext: false,
       playedRound: 0,
       order: 0,
-      lives,
+      lives: named !== '' ? lives : 0,
       words: 0,
       lastSeenAt: now,
     });
@@ -243,10 +275,15 @@ export const enterRoom = mutation({
     await pruneGhosts(ctx, room);
 
     const now = Date.now();
-    const nickname = normalizeNickname(args.nickname) || guestNickname();
     const players = await playersOf(ctx, room._id);
 
     const mine = players.find((p) => p.deviceId === args.deviceId);
+    // Walking in cannot fail, so a name already at this table is resolved rather
+    // than refused: you arrive as "Pavel 2". Renaming yourself on purpose is the
+    // opposite — see `setProfile`.
+    const taken = players.filter((p) => p._id !== mine?._id).map((p) => p.nickname);
+    const nickname = uniqueNickname(normalizeNickname(args.nickname) || guestNickname(), taken);
+
     if (mine) {
       // Re-entering is idempotent, but it does carry the current profile in —
       // the old join silently ignored a changed nickname, so renaming yourself
@@ -311,7 +348,6 @@ export const sitDown = mutation({
       words: 0,
     });
     await ctx.db.patch(room._id, { lastActivityAt: Date.now() });
-    await armCountdown(ctx, (await ctx.db.get(room._id))!);
     return { ok: true as const, waiting: false };
   },
 });
@@ -333,20 +369,24 @@ export const standUp = mutation({
     if (room.state === 'playing' && game && game.currentPlayerId === mine._id) {
       const others = seatedOf(players).filter((p) => p._id !== mine._id && p.lives > 0);
       if (others.length > 0) {
+        // Walking away is not solving it, so the prompt goes on with the bomb.
         await startTurn(ctx, {
-          roomId: room._id,
+          room,
           gameId: game._id,
           turnSeq: game.turnSeq,
-          difficulty: room.difficulty,
           playerId: others[0]._id,
           hits: 0,
+          keepPrompt: game.substring,
+          promptFails: game.promptFails ?? 0,
         });
       }
     }
 
     await ctx.db.patch(mine._id, { seated: false, seatNext: false, lives: 0 });
     await ctx.db.patch(room._id, { lastActivityAt: Date.now() });
-    await armCountdown(ctx, (await ctx.db.get(room._id))!);
+    // Nothing here ever starts the clock; standing up can only stop one that no
+    // longer has a table under it.
+    await holdCountdown(ctx, (await ctx.db.get(room._id))!);
     return { ok: true as const };
   },
 });
@@ -367,9 +407,28 @@ export const setProfile = mutation({
     const mine = players.find((p) => p.deviceId === args.deviceId);
     if (!mine) return { ok: false as const, reason: 'not-in-room' };
 
-    const nickname = normalizeNickname(args.nickname) || mine.nickname;
-    await ctx.db.patch(mine._id, { nickname, avatar: args.avatar, lastSeenAt: Date.now() });
-    return { ok: true as const, nickname };
+    // The picture is never refused: two identical faces at a table are a joke,
+    // two identical names are a broken game — the bomb is passed by name.
+    await ctx.db.patch(mine._id, { avatar: args.avatar, lastSeenAt: Date.now() });
+
+    const wanted = normalizeNickname(args.nickname);
+    if (!wanted || sameNickname(wanted, mine.nickname)) {
+      return { ok: true as const, nickname: mine.nickname };
+    }
+
+    // Nobody changes who they are mid-round. The table calls out whose turn it
+    // is by name, and a name that moves while the bomb is in the air is the one
+    // rename that costs somebody a life.
+    if (room.state === 'playing' && mine.seated) {
+      return { ok: false as const, reason: 'playing', nickname: mine.nickname };
+    }
+
+    if (players.some((p) => p._id !== mine._id && sameNickname(p.nickname, wanted))) {
+      return { ok: false as const, reason: 'name-taken', nickname: mine.nickname };
+    }
+
+    await ctx.db.patch(mine._id, { nickname: wanted });
+    return { ok: true as const, nickname: wanted };
   },
 });
 
@@ -392,10 +451,13 @@ export const heartbeat = mutation({
 });
 
 /**
- * The host opened the rules panel, which holds the countdown.
+ * The host opened the rules panel.
  *
- * Without this, adjusting the difficulty with two people already waiting is a
- * race against a clock you cannot stop.
+ * It calls off a countdown that is already running, so nobody is dealt a round
+ * under settings that are mid-edit. What it deliberately no longer does is the
+ * reverse: closing the panel starts nothing. Confirming rules and starting a
+ * game are two different intentions, and tying them together meant the host
+ * could not look at the difficulty without committing the room to a round.
  */
 export const openSettings = mutation({
   args: { code: v.string(), deviceId: v.string() },
@@ -405,17 +467,20 @@ export const openSettings = mutation({
     if (room.hostDeviceId !== args.deviceId) return { ok: false as const, reason: 'not-host' };
 
     await ctx.db.patch(room._id, { settingsOpen: true });
-    await armCountdown(ctx, (await ctx.db.get(room._id))!);
+    await cancelCountdown(ctx, (await ctx.db.get(room._id))!);
     return { ok: true as const };
   },
 });
 
 /**
- * Apply the rules and let the clock run again.
+ * Apply the rules.
  *
- * Closing the panel is part of the same call: confirming is what restarts the
- * countdown, so there is no state where the settings are agreed but the room is
- * still frozen.
+ * Every field is optional and applied only if present, because the panel now
+ * writes on each change rather than on a confirm button — the host drags the
+ * lives slider and the hearts on the table move while they watch. `close` is
+ * separate for the same reason: a settings write is not a decision to play.
+ *
+ * Starting a round is `startGame` and nothing else.
  */
 export const updateSettings = mutation({
   args: {
@@ -423,6 +488,11 @@ export const updateSettings = mutation({
     deviceId: v.string(),
     difficulty: v.optional(difficultyValidator),
     startingLives: v.optional(v.number()),
+    minTurnMs: v.optional(v.number()),
+    turnRange: v.optional(turnRangeValidator),
+    maxPromptAge: v.optional(v.number()),
+    /** Shut the panel as part of the same write. */
+    close: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const room = await roomByCode(ctx, args.code);
@@ -431,12 +501,24 @@ export const updateSettings = mutation({
     if (room.hostDeviceId !== args.deviceId) return { ok: false as const, reason: 'not-host' };
     if (room.state === 'playing') return { ok: false as const, reason: 'in-progress' };
 
-    const patch: Partial<Doc<'rooms'>> = { settingsOpen: false, lastActivityAt: Date.now() };
+    const patch: Partial<Doc<'rooms'>> = { lastActivityAt: Date.now() };
+    if (args.close) patch.settingsOpen = false;
     if (args.difficulty) patch.difficulty = args.difficulty;
+    if (args.turnRange) patch.turnRange = args.turnRange;
     if (args.startingLives !== undefined) {
       if (args.startingLives < MIN_LIVES || args.startingLives > MAX_LIVES)
         return { ok: false as const, reason: 'lives' };
       patch.startingLives = args.startingLives;
+    }
+    if (args.minTurnMs !== undefined) {
+      if (args.minTurnMs < MIN_TURN_FLOOR_MS || args.minTurnMs > MAX_TURN_FLOOR_MS)
+        return { ok: false as const, reason: 'turn' };
+      patch.minTurnMs = args.minTurnMs;
+    }
+    if (args.maxPromptAge !== undefined) {
+      if (args.maxPromptAge < MIN_PROMPT_AGE || args.maxPromptAge > MAX_PROMPT_AGE)
+        return { ok: false as const, reason: 'prompt-age' };
+      patch.maxPromptAge = args.maxPromptAge;
     }
     await ctx.db.patch(room._id, patch);
 
@@ -446,8 +528,6 @@ export const updateSettings = mutation({
         await ctx.db.patch(p._id, { lives: patch.startingLives });
       }
     }
-
-    await armCountdown(ctx, (await ctx.db.get(room._id))!);
     return { ok: true as const };
   },
 });
@@ -506,6 +586,7 @@ async function beginRound(ctx: MutationCtx, room: Doc<'rooms'>) {
     substring: '',
     deadline: 0,
     hitsSinceExplosion: 0,
+    promptFails: 0,
     usedWords: [],
   });
 
@@ -520,10 +601,9 @@ async function beginRound(ctx: MutationCtx, room: Doc<'rooms'>) {
   });
 
   await startTurn(ctx, {
-    roomId: room._id,
+    room,
     gameId,
     turnSeq: 0,
-    difficulty: room.difficulty,
     playerId: first._id,
     hits: 0,
   });
@@ -531,7 +611,14 @@ async function beginRound(ctx: MutationCtx, room: Doc<'rooms'>) {
   return { ok: true as const };
 }
 
-/** The host, jumping the countdown. */
+/**
+ * The host starting the room. The only thing in the app that arms the clock.
+ *
+ * It does not deal the round itself — it puts COUNTDOWN_MS on the board and lets
+ * `autoStart` do it — so that everyone at the table gets the same visible warning
+ * whether the host clicked or the clock ran out, and so the host can take it
+ * back with `cancelStart` while it runs.
+ */
 export const startGame = mutation({
   args: { code: v.string(), deviceId: v.string() },
   handler: async (ctx, args) => {
@@ -539,7 +626,25 @@ export const startGame = mutation({
     if (!room) return { ok: false as const, reason: 'not-found' };
     if (room.hostDeviceId !== args.deviceId) return { ok: false as const, reason: 'not-host' };
     if (room.state === 'playing') return { ok: false as const, reason: 'in-progress' };
-    return await beginRound(ctx, room);
+
+    const armed = await beginCountdown(ctx, room);
+    if (!armed) return { ok: false as const, reason: 'too-few' };
+    await ctx.db.patch(room._id, { lastActivityAt: Date.now() });
+    return { ok: true as const };
+  },
+});
+
+/** ...and taking it back. Host only, and a no-op if nothing is running. */
+export const cancelStart = mutation({
+  args: { code: v.string(), deviceId: v.string() },
+  handler: async (ctx, args) => {
+    const room = await roomByCode(ctx, args.code);
+    if (!room) return { ok: false as const, reason: 'not-found' };
+    if (room.hostDeviceId !== args.deviceId) return { ok: false as const, reason: 'not-host' };
+    if (room.state === 'playing') return { ok: false as const, reason: 'in-progress' };
+
+    await cancelCountdown(ctx, room);
+    return { ok: true as const };
   },
 });
 
@@ -576,13 +681,15 @@ export const leaveRoom = mutation({
     if (room.state === 'playing' && game && game.currentPlayerId === mine._id) {
       const others = seatedOf(players).filter((p) => p._id !== mine._id && p.lives > 0);
       if (others.length > 0) {
+        // Walking away is not solving it, so the prompt goes on with the bomb.
         await startTurn(ctx, {
-          roomId: room._id,
+          room,
           gameId: game._id,
           turnSeq: game.turnSeq,
-          difficulty: room.difficulty,
           playerId: others[0]._id,
           hits: 0,
+          keepPrompt: game.substring,
+          promptFails: game.promptFails ?? 0,
         });
       }
     }
@@ -604,7 +711,7 @@ export const leaveRoom = mutation({
       await ctx.db.patch(room._id, { hostDeviceId: remaining[0].deviceId });
 
     await ctx.db.patch(room._id, { lastActivityAt: Date.now() });
-    await armCountdown(ctx, (await ctx.db.get(room._id))!);
+    await holdCountdown(ctx, (await ctx.db.get(room._id))!);
     return { ok: true as const };
   },
 });

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { BOMB_URL } from '$lib/avatars.ts';
   import { CODE_LENGTH, isValidCode } from '$convex/rules';
   import CreateRoomPanel from '$lib/components/game/CreateRoomPanel.svelte';
   import RoomBrowser from '$lib/components/game/RoomBrowser.svelte';
@@ -30,27 +29,17 @@
 
 <main class="debu-arena-bg min-h-dvh px-4 py-10">
   <div class="mx-auto flex w-full max-w-2xl flex-col items-center gap-8">
-    <header class="flex flex-col items-center gap-3 text-center">
-      <img
-        src={BOMB_URL}
-        alt=""
-        width="120"
-        height="120"
-        class="debu-decor size-[120px] drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)] [animation:debu-bomb-float_3.6s_ease-in-out_infinite]"
-      />
-      <h1 class="font-display text-5xl leading-none font-bold text-ink sm:text-6xl">
+    <!-- Title left, creation right, on one line: the page's job is to get you into
+         a room, so the thing that does that sits level with the name of the game
+         rather than under a paragraph explaining it. Creation is still inline
+         rather than behind a modal — the old lobby opened a dialog to ask for a
+         name you had already given. -->
+    <header class="flex w-full flex-wrap items-center justify-between gap-4">
+      <h1 class="font-display text-3xl leading-none font-bold text-ink sm:text-4xl">
         deBUCHánkovaná
       </h1>
-      <p class="max-w-md text-ink-dim">
-        Napiš české slovo, které obsahuje daná písmena — dřív, než bouchne bomba.
-      </p>
-      <p class="text-sm text-ink-faint">Nevíš, kolik času ti zbývá. To je na tom to nejlepší.</p>
+      <CreateRoomPanel />
     </header>
-
-    <!-- Creation sits at the top and is inline rather than behind a modal: on the
-         old lobby, starting a game was a button that opened a dialog that asked
-         for a name you had already given. -->
-    <CreateRoomPanel />
 
     <RoomBrowser />
 

@@ -315,4 +315,5 @@
   .prompt em.easy { color: #62d68a; }
   .prompt em.medium { color: #ffd479; }
   .prompt em.hard { color: #ff8a8a; }
+  .prompt em.nightmare { color: #c98cff; }
 </style>

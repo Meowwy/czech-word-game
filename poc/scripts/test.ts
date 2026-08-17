@@ -19,10 +19,18 @@ for (const w of ['gfjzisjv', 'kocka', 'zzzz', 'blbouncita', 'adsl', 'aakjaerova'
   check(`rejects ${w}`, !index.has(w));
 
 console.log('\nprompt table');
-const prompts = JSON.parse(readFileSync('data/prompts.json', 'utf8'));
-check('every prompt is solvable (>=1 word)', prompts.every((p: any) => p.words >= 1));
-check('every prompt is lowercase Czech letters', prompts.every((p: any) => /^[a-záčďéěíňóřšťúůýž]+$/.test(p.substring)));
-check('has easy prompts', prompts.filter((p: any) => p.difficulty === 'easy').length > 100);
+// prompts.json is the v1 banding, prompts-v2.json the four-band split the game
+// plays. Both are the same rating table, so both must pass the same sanity checks.
+for (const file of ['data/prompts.json', 'data/prompts-v2.json']) {
+  const prompts = JSON.parse(readFileSync(file, 'utf8'));
+  check(`${file}: every prompt is solvable (>=1 word)`, prompts.every((p: any) => p.words >= 1));
+  check(`${file}: every prompt is lowercase Czech letters`, prompts.every((p: any) => /^[a-záčďéěíňóřšťúůýž]+$/.test(p.substring)));
+  check(`${file}: has easy prompts`, prompts.filter((p: any) => p.difficulty === 'easy').length > 100);
+}
+const v2 = JSON.parse(readFileSync('data/prompts-v2.json', 'utf8'));
+// The floor the whole prompt table rests on: the worst prompt in the game's
+// hardest band is still answerable by five Tier B words.
+check('v2 nightmare band is rated 5..69', v2.filter((p: any) => p.difficulty === 'nightmare').every((p: any) => p.words >= 5 && p.words < 70));
 
 console.log('\nbenchmark thresholds');
 const r = await runBench(offlineValidator(index, 'offline'));

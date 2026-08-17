@@ -5,6 +5,8 @@
 //
 // Plus prompts.json: every 2- and 3-char substring with its "words per prompt"
 // count, which is the `min. N wpp` mechanic visible in the jklm.fun screenshot.
+// prompts-v2.json is the same table under the four-band split the game plays --
+// see `bandV1` / `bandV2` below.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // POS chars that denote a real, typeable Czech word.
@@ -78,15 +80,35 @@ for (const w of tierB) {
     for (let i = 0; i + n <= w.length; i++) seen.add(w.slice(i, i + n));
   for (const s of seen) counts.set(s, (counts.get(s) ?? 0) + 1);
 }
-const prompts = [...counts]
+// A difficulty is nothing but a cut on `words`, so a re-banding is a new cut over
+// the same counts -- never a recount. Both bandings are emitted from one pass:
+// v1 is kept because it is what the shipped prompts were rated by, v2 is what the
+// game plays. Same substrings, same ratings, same order in both files.
+const bandV1 = (w) => (w >= 300 ? 'easy' : w >= 50 ? 'medium' : 'hard');
+// v2 splits v1's medium in two and renames its tail: the old `hard` (5..49) grew a
+// 50..69 shoulder off medium and became `nightmare`, so every named level except
+// easy asks for more than it used to.
+const bandV2 = (w) =>
+  w >= 300 ? 'easy' : w >= 150 ? 'medium' : w >= 70 ? 'hard' : 'nightmare';
+
+const rated = [...counts]
   .filter(([s, c]) => c >= 5 && /^[a-záčďéěíňóřšťúůýž]+$/.test(s))
-  .map(([substring, words]) => ({
-    substring, words,
-    difficulty: words >= 300 ? 'easy' : words >= 50 ? 'medium' : 'hard',
-  }))
+  .map(([substring, words]) => ({ substring, words }))
   .sort((a, b) => b.words - a.words);
 
+const band = (fn) => rated.map((p) => ({ ...p, difficulty: fn(p.words) }));
+const prompts = band(bandV1);
+const promptsV2 = band(bandV2);
+
 writeFileSync('data/prompts.json', JSON.stringify(prompts));
+writeFileSync('data/prompts-v2.json', JSON.stringify(promptsV2));
+
+// Insertion order follows the sort, so the bands come out easiest-first.
+const tally = (list) => {
+  const out = {};
+  for (const p of list) out[p.difficulty] = (out[p.difficulty] ?? 0) + 1;
+  return out;
+};
 
 const meta = {
   builtAt: new Date().toISOString(),
@@ -99,11 +121,8 @@ const meta = {
   droppedDiacriticTwins: diacriticTwins,
   includeProperNouns: INCLUDE_PROPER_NOUNS,
   prompts: prompts.length,
-  byDifficulty: {
-    easy: prompts.filter((p) => p.difficulty === 'easy').length,
-    medium: prompts.filter((p) => p.difficulty === 'medium').length,
-    hard: prompts.filter((p) => p.difficulty === 'hard').length,
-  },
+  byDifficulty: tally(prompts),
+  byDifficultyV2: tally(promptsV2),
 };
 writeFileSync('data/meta.json', JSON.stringify(meta, null, 2));
 console.log(meta);

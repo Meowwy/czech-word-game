@@ -33,6 +33,7 @@ const check = (name, ok, detail = '') => {
   if (!ok) failed++;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sumLives = (players) => players.reduce((n, p) => n + p.lives, 0);
 
 // A real word containing the prompt, found in the common list so it is certainly
 // in the acceptance list too.
@@ -64,11 +65,15 @@ try {
   console.log('room lifecycle');
   const created = await client.mutation('rooms:createRoom', {
     deviceId: A,
+    name: '  U   Nováků  ',
     nickname: 'Pavel',
     startingLives: 1,
   });
   check('createRoom returns a code', created.ok && /^[A-Z]{4}$/.test(created.code), created.code);
   code = created.code;
+
+  const named = await viewAs(code, A);
+  check('the room keeps the name it was given, normalised', named.room.name === 'U Nováků', named.room.name);
 
   const entered = await client.mutation('rooms:enterRoom', { code, deviceId: B, nickname: 'Katka' });
   check('a second person walks in', entered.ok === true);
@@ -95,6 +100,29 @@ try {
   check('the new room is advertised', !!mine);
   check('it counts players and watchers apart', mine?.seated === 1 && mine?.watching === 1);
 
+  console.log('\none name per table');
+  // Walking in cannot fail, so a clash is renamed rather than refused; asking
+  // for a taken name on purpose is refused rather than renamed.
+  const clash = await client.mutation('rooms:enterRoom', { code, deviceId: C, nickname: 'Pavel' });
+  check('a third person walks in under a taken name', clash.ok === true);
+  let asC = await viewAs(code, C);
+  check('...and is numbered instead of doubled', asC.me.nickname === 'Pavel 2', asC.me.nickname);
+
+  const stolen = await client.mutation('rooms:setProfile', {
+    code,
+    deviceId: C,
+    nickname: 'pavel',
+  });
+  check(
+    'renaming onto a taken name is refused, case and all',
+    !stolen.ok && stolen.reason === 'name-taken',
+  );
+  asC = await viewAs(code, C);
+  check('...and the name on the seat does not move', asC.me.nickname === 'Pavel 2');
+
+  const renamed = await client.mutation('rooms:setProfile', { code, deviceId: C, nickname: 'Bára' });
+  check('a free name is taken', renamed.ok && renamed.nickname === 'Bára');
+
   console.log('\nhost-only settings (enforced server-side, not just hidden in the UI)');
   const notHost = await client.mutation('rooms:updateSettings', {
     code,
@@ -113,36 +141,69 @@ try {
   const notHostStart = await client.mutation('rooms:startGame', { code, deviceId: B });
   check('non-host cannot start the game', !notHostStart.ok && notHostStart.reason === 'not-host');
 
-  console.log('\nsitting down arms the countdown');
+  console.log('\nnothing starts a round except the host');
   v = await viewAs(code, A);
   check('one player is not enough to start a clock', v.room.countdownEndsAt === undefined);
+
+  const tooFew = await client.mutation('rooms:startGame', { code, deviceId: A });
+  check('the host cannot start a one-player room', !tooFew.ok && tooFew.reason === 'too-few');
 
   const sat = await client.mutation('rooms:sitDown', { code, deviceId: B });
   check('the watcher takes a seat', sat.ok === true && sat.waiting === false);
 
   v = await viewAs(code, A);
-  check('two seated players arm the countdown', typeof v.room.countdownEndsAt === 'number');
-  check('the countdown end time IS public, unlike the fuse', v.room.countdownEndsAt > Date.now());
+  check(
+    'a second player does NOT arm the countdown on its own',
+    v.room.countdownEndsAt === undefined,
+  );
 
-  console.log('\nthe rules panel holds the clock');
+  console.log('\nthe rules panel');
   await client.mutation('rooms:openSettings', { code, deviceId: A });
   v = await viewAs(code, A);
-  check('opening the rules calls the countdown off', v.room.countdownEndsAt === undefined);
-  check('and says so to everyone', v.room.settingsOpen === true);
+  check('the panel says it is open, to everyone', v.room.settingsOpen === true);
 
   const confirmed = await client.mutation('rooms:updateSettings', {
     code,
     deviceId: A,
     difficulty: 'easy',
-    startingLives: 1,
+    startingLives: 2,
+    minTurnMs: 3000,
+    turnRange: 'short',
+    // High enough that nothing retires a prompt inside this run except a
+    // correct answer — which is what the survival check below relies on.
+    maxPromptAge: 5,
+    close: true,
   });
   check('the host confirms', confirmed.ok === true);
   v = await viewAs(code, A);
-  check('settings landed', v.room.difficulty === 'easy' && v.room.startingLives === 1);
-  check('confirming restarts the countdown', typeof v.room.countdownEndsAt === 'number');
+  check('settings landed', v.room.difficulty === 'easy' && v.room.startingLives === 2);
+  check(
+    'the timing rules landed too',
+    v.room.minTurnMs === 3000 && v.room.turnRange === 'short' && v.room.maxPromptAge === 5,
+  );
   check('the panel closed itself', v.room.settingsOpen === false);
+  check('...and closing it started nothing', v.room.countdownEndsAt === undefined);
 
-  console.log('\nthe countdown starting the game on its own (waiting up to 20s)');
+  console.log('\nthe host arming the clock, taking it back, and arming it again');
+  const armed = await client.mutation('rooms:startGame', { code, deviceId: A });
+  check('the host arms the countdown', armed.ok === true);
+  v = await viewAs(code, A);
+  check('the countdown is running', typeof v.room.countdownEndsAt === 'number');
+  check('the countdown end time IS public, unlike the fuse', v.room.countdownEndsAt > Date.now());
+
+  await client.mutation('rooms:cancelStart', { code, deviceId: A });
+  v = await viewAs(code, A);
+  check('the host can take it back', v.room.countdownEndsAt === undefined);
+
+  await client.mutation('rooms:startGame', { code, deviceId: A });
+  await client.mutation('rooms:openSettings', { code, deviceId: A });
+  v = await viewAs(code, A);
+  check('opening the rules calls the countdown off', v.room.countdownEndsAt === undefined);
+  await client.mutation('rooms:updateSettings', { code, deviceId: A, close: true });
+
+  await client.mutation('rooms:startGame', { code, deviceId: A });
+
+  console.log('\nthe countdown dealing the round (waiting up to 20s)');
   const waitStart = Date.now();
   let autoStarted = false;
   while (Date.now() - waitStart < 20_000) {
@@ -151,7 +212,7 @@ try {
     if (v.room.state === 'playing') {
       autoStarted = true;
       check(
-        'the countdown dealt a round with nobody pressing start',
+        'the countdown dealt the round the host asked for',
         true,
         `after ${((Date.now() - waitStart) / 1000).toFixed(1)}s`,
       );
@@ -301,13 +362,31 @@ try {
       `${stopped} (after ${turn} turns, ${used.size} words played: ${[...used].join(', ')})`,
     );
 
-  console.log('\nthe scheduled bomb and the end of the round (waiting up to 30s)');
-  // One life each, so the first explosion ends it.
+  console.log('\nthe scheduled bomb and the end of the round (waiting up to 60s)');
+  // Two lives each, so the round outlives its first explosion — which is the
+  // only way to watch what an explosion does to the prompt.
   const startedAt = Date.now();
   let over = false;
-  while (Date.now() - startedAt < 30_000) {
+  // The bomb going off is not the same event as a word being solved, and only
+  // one of them is allowed to change the prompt. Poll pairs: when the table
+  // loses a life and the round carries on, the prompt must be the one that just
+  // killed somebody. Nobody answered it, so it has not finished with the table.
+  let before = await viewAs(code, A);
+  let survived = false;
+  while (Date.now() - startedAt < 60_000) {
     await sleep(1000);
     const now = await viewAs(code, A);
+    const lost =
+      sumLives(now.players) < sumLives(before.players) && now.room.state === 'playing';
+    if (lost && !survived) {
+      survived = true;
+      check(
+        'an explosion hands the SAME prompt on — a prompt lives until it is solved',
+        now.game.substring === before.game.substring,
+        `${before.game.substring} -> ${now.game.substring}`,
+      );
+    }
+    before = now;
     if (now.room.state === 'over') {
       over = true;
       check(
@@ -316,6 +395,13 @@ try {
         `after ${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
       );
       check('a winner was recorded on the room', typeof now.room.lastWinner === 'string', now.room.lastWinner);
+      // Only now: during play this array grows on every correct answer and
+      // `view` is the one subscription every client in the room holds.
+      check(
+        "the round's words arrive for the results screen",
+        Array.isArray(now.game.usedWords) && now.game.usedWords.length > 0,
+        String(now.game.usedWords?.length),
+      );
       check('the game names the winner too', !!now.game.winnerId);
       check(
         'the players who played stand up again',
@@ -336,7 +422,13 @@ try {
       break;
     }
   }
-  if (!over) check('the round ended within 30s', false, 'scheduler may not be running');
+  if (!over) check('the round ended within 60s', false, 'scheduler may not be running');
+  if (!survived)
+    check(
+      'a mid-round explosion was observed',
+      false,
+      'every poll landed between the blast and the next one — the prompt survival check never ran',
+    );
 } finally {
   if (code) {
     for (const d of [A, B, C]) await client.mutation('rooms:leaveRoom', { code, deviceId: d });

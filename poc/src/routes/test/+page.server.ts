@@ -1,7 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { promptPool, getIndex } from '$lib/server/wordlist.ts';
-
-const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+import { DIFFICULTIES } from '$convex/rules';
 
 export const load: PageServerLoad = async () => {
   // getIndex() here warms the 48MB word index while the player is still on the

@@ -1,21 +1,14 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { DIFFICULTIES, DIFFICULTY_LABEL, type Difficulty } from '$convex/rules';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
 
   type Prompt = { substring: string; words: number; difficulty: string };
-  type Difficulty = 'easy' | 'medium' | 'hard';
 
   const ROUND_MS = 10_000;
   const LIVES = 3;
-
-  const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
-  const DIFFICULTY_LABEL: Record<Difficulty, string> = {
-    easy: 'lehká',
-    medium: 'střední',
-    hard: 'těžká',
-  };
 
   let phase = $state<'menu' | 'playing' | 'over'>('menu');
   let difficulty = $state<Difficulty>('easy');
@@ -255,6 +248,7 @@
   .diff.easy b { color: #62d68a; }
   .diff.medium b { color: #ffd479; }
   .diff.hard b { color: #ff8a8a; }
+  .diff.nightmare b { color: #c98cff; }
   .quiet { display: inline-block; margin-top: 1.6rem; color: #6d7480; font-size: .85rem; }
   .quiet:hover { color: #9aa2ad; }
 

@@ -5,9 +5,15 @@
   type Props = {
     value: string;
     onpick: (avatar: string) => void;
+    /**
+     * Which way the grid opens. It used to only ever drop up, because the picker
+     * only ever lived in a bar pinned to the bottom of the screen; from the top
+     * corner that would open it off the top of the page.
+     */
+    drop?: 'up' | 'down';
   };
 
-  let { value, onpick }: Props = $props();
+  let { value, onpick, drop = 'up' }: Props = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement | null>(null);
@@ -30,10 +36,10 @@
   }}
 />
 
-<!-- The picture *is* the button. It is drawn at the size the winner is drawn at,
-     because this is the one place you see yourself the way the table will see
-     you, and a thumbnail cannot tell you that. The chevron in the corner is the
-     only thing that says a menu is behind it. -->
+<!-- The picture *is* the button, drawn at exactly the size a seat draws it:
+     this is the one place you see yourself the way the table will see you, and
+     neither a thumbnail nor an oversized portrait tells you that. The chevron in
+     the corner is the only thing that says a menu is behind it. -->
 <div class="relative shrink-0" bind:this={root}>
   <button
     type="button"
@@ -49,7 +55,7 @@
       alt=""
       width="96"
       height="96"
-      class="size-16 rounded-lg object-cover sm:size-24"
+      class="size-16 rounded-lg object-cover sm:size-[72px]"
     />
     <span
       class="absolute -right-1.5 -bottom-1.5 grid size-6 place-items-center rounded-full border border-panel-line bg-panel text-ink-dim shadow-[0_2px_6px_rgba(0,0,0,0.5)] transition-colors group-hover:text-ink sm:size-7"
@@ -62,12 +68,15 @@
   </button>
 
   {#if open}
-    <!-- Drops *up*, and is clamped to the viewport: the bar is pinned to the
-         bottom of a phone screen, so a panel that sized itself freely would open
-         either below the fold or past the right edge. `max-w` against the
-         viewport is what keeps the grid on screen at 320px. -->
+    <!-- Clamped to the viewport whichever way it opens: a panel that sized
+         itself freely would open past the right edge of a phone. `max-w` against
+         the viewport is what keeps the grid on screen at 320px. -->
     <div
-      class="absolute bottom-full left-0 z-30 mb-3 w-72 max-w-[calc(100vw-1.5rem)] rounded-card border border-panel-line bg-panel p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.55)] [animation:debu-rise-in_0.15s_ease-out]"
+      class="absolute left-0 z-30 w-72 max-w-[calc(100vw-1.5rem)] rounded-card border border-panel-line bg-panel p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.55)] [animation:debu-rise-in_0.15s_ease-out]"
+      class:bottom-full={drop === 'up'}
+      class:mb-3={drop === 'up'}
+      class:top-full={drop === 'down'}
+      class:mt-3={drop === 'down'}
     >
       <div class="grid grid-cols-4 gap-2">
         {#each AVATARS as avatar (avatar)}

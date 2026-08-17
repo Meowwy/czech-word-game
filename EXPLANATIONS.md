@@ -656,19 +656,80 @@ tyš(2)  abb(1)  bbé(1)  dee(3)  bsc(2)  bsi(1)  hil(4)
 **nothing** — all 11,774 already pass, because Tier B is clean. It is a safety net for future data,
 not a working filter today. Worth saying out loud rather than implying it does work.
 
-11,774 → **8,260 prompts**, banded by two thresholds:
+11,774 → **8,260 prompts.** Those are then split into difficulty bands by a single expression at
+the end of `04-filter.mjs`, and its thresholds are the whole difficulty model. The first version of
+it — v1 below, still emitted as `prompts.json` — used two:
+
+```js
+const bandV1 = (w) => (w >= 300 ? 'easy' : w >= 50 ? 'medium' : 'hard');
+```
+
+| band     | rule                | prompts   | share   | median rating | rating range |
+| -------- | ------------------- | --------- | ------- | ------------- | ------------ |
+| `easy`   | `words >= 300`      | 690       | 8%      | 600           | 300 – 9,850  |
+| `medium` | `50 <= words < 300` | 2,474     | 30%     | 100           | 50 – 299     |
+| `hard`   | `5 <= words < 50`   | **5,096** | **62%** | 15            | 5 – 49       |
+
+Say a boundary out loud and it stops being an arbitrary integer: a prompt is `easy` when at least
+**300 of Tier B's 92,610 words** contain it — one word in 309 that a Czech speaker actually uses in
+conversation. `medium` asks for one in 1,852. `hard` reaches down to the `c >= 5` floor, so its
+weakest prompts are answerable by 5 everyday words and no fewer.
+
+There is no other difficulty model anywhere in the project. No per-player rating, no adaptive
+scaling, no reconsideration at runtime: a room picks a band, and the band is a fixed pool of
+strings from this one line.
+
+### Where 300 and 50 come from
+
+Nothing derives them. They are judgement calls, the same species as Tier B's `>= 50` frequency cut,
+and that is worth stating plainly because the code gives no hint that they were chosen rather than
+computed. (The two 50s are unrelated, despite reading alike — `TIER_B_MIN_FREQ = 50` counts
+_subtitle occurrences of one word_, the medium threshold counts _Tier B words containing one
+substring_. Same digit, different unit, no shared reasoning.)
+
+What can be checked is what the choice buys, and there are three things worth knowing.
+
+**At the margin the boundary is arbitrary, and that is tolerable.** Two words separate the last
+medium prompt from the first easy one:
 
 ```
-easy     c >= 300
-medium   50 <= c < 300
-hard      5 <= c < 50
+medium, just below:  pt(299)  ane(299)  tem(297)  kv(297)  ekt(296)
+easy,   just above:  res(300) bá(300)   lav(303)  kra(304) hle(305)
+
+hard,   just below:  oň(49)   ošt(49)   vko(49)   rdo(49)  vte(49)
+medium, just above:  gie(51)  mul(51)   běl(51)   těš(51)  una(51)
 ```
 
-| band   | prompts | share   |
-| ------ | ------- | ------- |
-| easy   | 690     | 8%      |
-| medium | 2,474   | 30%     |
-| hard   | 5,096   | **62%** |
+No player will ever feel the difference between `ane` and `res`. It does not matter, because the
+band is never a property the game shows: it selects a **pool**, and the pool's median (600 vs 100
+vs 15) is what a round actually feels like. A threshold only needs to be defensible where the
+distribution is dense, not where it is being read one prompt at a time.
+
+**The bands track prompt length without ever mentioning it.**
+
+| band     | 2-letter | 3-letter  |
+| -------- | -------- | --------- |
+| `easy`   | 385      | 305       |
+| `medium` | 257      | 2,217     |
+| `hard`   | 319      | 4,777     |
+| _total_  | _961_    | _7,299_   |
+
+40 % of two-letter prompts are easy against 4 % of three-letter ones. That is forced, not
+coincidental: any word containing `abc` also contains `ab` and `bc`, so
+
+```
+count(abc) <= min( count(ab), count(bc) )
+```
+
+A three-letter prompt can never outrank either of its halves. Verified across all 7,299 of them:
+**zero violations.** So counting already encodes most of what a length rule would have encoded —
+while still letting `ova`(3,097) be easy and `oň`(49) be hard, which a rule about length could not.
+
+**They are cheap to move.** Re-banding is `npm run filter && npm run prompts` — about 20 seconds of
+local CPU. No re-expansion, no re-tagging, no network. This is the payoff of storing observations
+rather than verdicts, one stage later: `prompts.json` keeps every prompt's raw `words` count, so the
+thresholds are a policy applied on top of it rather than something baked into the data. The next
+section is that claim being cashed in.
 
 **Why so lopsided?** Substring frequency follows a Zipf-like law — a few substrings are wildly
 common, and there is a very long tail of rare ones. Equal buckets would actually be _wrong_: there
@@ -679,6 +740,66 @@ biggest pool.
 > frequencies, file sizes, user activity and city populations are all heavy-tailed. If you split
 > such data into equal-sized bins, your bin boundaries stop meaning anything. Choose thresholds
 > that mean something in the domain, then report how lopsided the result is.
+
+### Prompts v2 — the same table, cut four ways
+
+The three bands above are **v1**. What the game actually deals is **v2**, which keeps `easy` where
+it was, splits `medium` in two, and gives the long tail a name of its own:
+
+```js
+const bandV1 = (w) => (w >= 300 ? 'easy' : w >= 50 ? 'medium' : 'hard');
+const bandV2 = (w) =>
+  w >= 300 ? 'easy' : w >= 150 ? 'medium' : w >= 70 ? 'hard' : 'nightmare';
+```
+
+| band        | UI          | rule                | prompts   | share   | median rating |
+| ----------- | ----------- | ------------------- | --------- | ------- | ------------- |
+| `easy`      | lehká       | `words >= 300`      | 690       | 8.4 %   | 600           |
+| `medium`    | střední     | `150 <= words < 300` | 662       | 8.0 %   | 197           |
+| `hard`      | těžká       | `70 <= words < 150` | 1,204     | 14.6 %  | 98            |
+| `nightmare` | noční můra  | `5 <= words < 70`   | **5,704** | **69.1 %** | 17         |
+
+Where every v1 prompt went — nothing was added, dropped or recounted:
+
+```
+easy   690  ->  easy   690
+medium 662  ->  medium 662        \
+       1204 ->  hard   1204        }  v1's medium, split three ways
+        608 ->  nightmare 608     /
+hard   5096 ->  nightmare 5096
+```
+
+So `nightmare` is very nearly the old `hard` (5,096 of its 5,704), and the level now called `hard`
+is the harder half of what used to be `medium`. **Every named difficulty except easy asks for more
+than it did.** That is the point of the change: in v1 the middle of the game was a 2,474-prompt band
+spanning a 6× range of ratings, so "medium" and "hard" felt like the same request. v2 makes `hard`
+mean something a player can feel, and gives the tail — where the genuinely obscure prompts live —
+an honest name.
+
+**`nightmare` is nasty, not impossible.** The floor is still `c >= 5`, and the Tier A / Tier B gap
+still does the work. Measured across the band, against the real acceptance list:
+
+| prompt | position in band | Tier B rating | real Tier A answers |
+| ------ | ---------------- | ------------- | ------------------- |
+| `dap`  | the floor        | 5             | 661                 |
+| `čár`  | median           | 17            | 1,458               |
+| `lyš`  | top              | 69            | 1,040               |
+
+A player staring at `ČÁR` with a bomb ticking has 1,458 words that would be accepted. Thinking of
+one is the game.
+
+**What the re-band actually cost.** One pass, two files: `04-filter.mjs` maps the rated substrings
+through each band function and writes `prompts.json` (v1) and `prompts-v2.json` (v2). About 20
+seconds, no network, no re-tagging — and `data/prompts.json` came back **byte-identical**, which is
+the check that the new banding really is a different cut of the same counts and not a rebuild. Only
+v2 ships: `05-convex-prompts.mjs` reads it, `getPrompts()` reads it, and `netlify.toml` bundles it.
+v1 stays on disk as the rating table the shipped prompts were sorted by.
+
+> **Principle: a policy that lives in one expression can be revised; one baked into data cannot.**
+> The difficulty model is two comparisons at the end of a filter script, over a count that was
+> stored raw. That is why "add a fourth tier" is a 20-second re-run and a widened union type, rather
+> than a 34-second API job and a migration. When you are tempted to store a verdict, ask what it
+> will cost to change your mind.
 
 ### The consequence: rating and acceptance disagree, on purpose
 
@@ -712,15 +833,40 @@ That gap _is_ the design: rating models the player, acceptance models the langua
 `05-convex-prompts.mjs` writes `convex/prompts.data.ts` — the 8,260 substrings grouped by
 difficulty, as a plain TypeScript module.
 
-Why not just read `prompts.json` at runtime? Because the game's room state lives in Convex, and
+Why not just read `prompts-v2.json` at runtime? Because the game's room state lives in Convex, and
 Convex functions cannot read arbitrary files. The prompt must be chosen **server-side** so every
 player in a room sees the same one without any coordination.
 
 Only the substrings are emitted, not the counts — the `words` rating is a build-time artifact used
 to assign difficulty, and the game never displays it. 8,260 strings is 54 KB.
 
-The file header says `// GENERATED … do not edit`, and a test asserts it stays in sync with
-`prompts.json`.
+The shape it writes is exactly the four v2 pools:
+
+```ts
+export const PROMPTS: Record<'easy' | 'medium' | 'hard' | 'nightmare', string[]> = { … };
+```
+
+which is all the runtime needs. A room stores one `difficulty` (default `medium`), and `startTurn`
+in `convex/turns.ts` draws uniformly from that one array:
+
+```js
+const pool = PROMPTS[rules.difficulty];
+const substring = opts.keepPrompt || pool[Math.floor(Math.random() * pool.length)];
+```
+
+Uniform, with no memory: nothing tracks what a room has already seen, so a repeat is possible and
+on the narrow bands not even unlikely — `medium` is the smallest pool at 662, and the birthday
+paradox puts a 30-turn round there at roughly even odds of one.
+
+`keepPrompt` is the one exception, and it belongs to the game rules rather than to the data: an
+unsolved prompt is handed to the next player instead of being redrawn, up to the room's
+`maxPromptAge`. The single-player `/test` page draws from the Netlify side instead, via
+`promptPool()` in `src/lib/server/wordlist.ts`, which ships a shuffled slice of 80 with the page so
+advancing costs no round trip.
+
+The file header says `// GENERATED … do not edit`, and `npm run test:rules` asserts it stays in
+sync with `prompts-v2.json` — every band non-empty, pool sizes equal to the source, bands
+non-overlapping and ordered easiest-first, and the whole set still the same substrings as v1.
 
 > **Principle: generated files should announce that they are generated, and a test should prove
 > they are current.** Otherwise someone edits the artifact instead of the generator, and the next

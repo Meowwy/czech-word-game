@@ -78,8 +78,8 @@ Validation does **not** call an API. The list is generated once by a 5-stage pip
 01-fetch    hunspell cs_CZ.dic/.aff (GPL) + a Czech frequency list
 02-expand   affix expansion -> 4.3M unique candidate forms       [RECALL, noisy]
 03-tag      bulk POST to LINDAT MorphoDiTa, 20k words/request    [PRECISION]
-04-filter   POS filtering -> words.txt, words-common.txt, prompts.json
-05-convex-prompts  prompts.json -> convex/prompts.data.ts
+04-filter   POS filtering -> words.txt, words-common.txt, prompts.json + prompts-v2.json
+05-convex-prompts  prompts-v2.json -> convex/prompts.data.ts
 ```
 
 The two halves are the point: hunspell over-generates (it invents surname forms like
@@ -103,10 +103,31 @@ Prompts are rated by how many *Tier B* words contain them, but submissions valid
 
     min 1.0×   p25 24.5×   median 41.3×   p75 68.6×   p95 171.4×   max 4594.7×
 
-The median *hard* prompt is rated under 50 and has **668** valid answers. **No prompt has zero** —
-the worst, `ždé`, has 5. The rating measures *how easily a human thinks of one*, not whether one
-exists. Don't "fix" this asymmetry; it is the design. The game never displays the rating, so only
-difficulty banding depends on it.
+The median *nightmare* prompt (`čár`, rated 17) has **1,458** valid answers, and the floor of that
+band (`dap`, rated 5) still has **661**. **No prompt has zero** — the worst, `ždé`, has 5. The
+rating measures *how easily a human thinks of one*, not whether one exists. Don't "fix" this
+asymmetry; it is the design. The game never displays the rating, so only difficulty banding
+depends on it.
+
+### Two prompt bandings — v2 is the one that plays
+
+Difficulty is a cut on the same `words` rating, so a re-banding is a new cut, never a recount.
+`04-filter.mjs` emits both from one pass:
+
+| file | bands | who reads it |
+|---|---|---|
+| `data/prompts.json` | v1: easy ≥300, medium 50–299, hard 5–49 | nothing at runtime — kept as the rating table the shipped prompts were sorted by, and asserted against in `npm test` |
+| `data/prompts-v2.json` | **v2**: easy ≥300, medium 150–299, hard 70–149, **nightmare** 5–69 | `05-convex-prompts.mjs` → `prompts.data.ts`, and `getPrompts()` for `/test` and the dashboard |
+
+690 / 662 / 1,204 / 5,704 prompts. v2 splits v1's medium and renames its tail, so every named level
+except easy asks for more than it used to — `nightmare` ("noční můra" in the UI) is roughly the old
+`hard`, and the new `hard` is the harder half of the old `medium`.
+
+Adding a band means four places, and `npm run test:rules` fails if any of them is missed:
+`DIFFICULTIES` + `DIFFICULTY_LABEL` in `convex/rules.ts`, the `difficulty` union in
+`convex/schema.ts` (**widen, never rewrite** — old rooms must still validate), `bandV2` in
+`04-filter.mjs`, and the empty-pool object in `05-convex-prompts.mjs`. Every picker in the UI is
+driven off `DIFFICULTIES`, so nothing else needs touching.
 
 Tier B contains **zero** proper nouns, so prompt generation is unaffected by `INCLUDE_PROPER_NOUNS`.
 
@@ -133,9 +154,9 @@ where `included_files` puts them.
 |---|---|
 | `convex/schema.ts` | `rooms`, `players`, `games`, `typing` — all with indexes, all queried via `withIndex` |
 | `convex/rules.ts` | **pure**, no Convex imports, injected `rand` — this is where the testable logic lives |
-| `convex/turns.ts` | `roomByCode` / `playersOf` / `seatedOf` / `gameOf` / `startTurn` / `armCountdown` |
-| `convex/rooms.ts` | `view`, `list`, enter/sit/stand, profile, heartbeat, settings, start, `autoStart`, leave |
-| `convex/game.ts` | `submitWord`, the live-draft pair `setTyping`/`typingOf`, and the internal `explode` |
+| `convex/turns.ts` | `roomByCode` / `playersOf` / `seatedOf` / `gameOf` / `roomRules` / `startTurn` / `beginCountdown` / `cancelCountdown` / `holdCountdown` |
+| `convex/rooms.ts` | `view`, `list`, enter/sit/stand, profile, heartbeat, settings, `startGame`/`cancelStart`, `autoStart`, leave |
+| `convex/game.ts` | `submitWord`, `bounceWord`, the live-draft pair `setTyping`/`typingOf`, and the internal `explode` |
 | `convex/crons.ts` | nightly sweep of rooms nobody has touched for a day |
 | `convex/prompts.data.ts` | **generated** by `npm run prompts` — do not edit |
 | `convex/_generated/` | **generated** by `npx convex dev` — committed, as Convex intends |
@@ -161,7 +182,15 @@ Four things here are easy to break:
 - **`turnSeq` cancels the bomb; `startSeq` cancels the countdown.** Both work the same way: the
   scheduled job (`explode`, `autoStart`) carries the sequence it was armed with and no-ops on
   mismatch, so nothing ever reaches into the scheduler. Every path that ends a turn must go through
-  `startTurn` or bump `turnSeq`; every path that changes who is seated must call `armCountdown`.
+  `startTurn` or bump `turnSeq`; every path that changes who is seated must call `holdCountdown`.
+- **Only the host arms the clock.** `beginCountdown` is called from `startGame` and nowhere else.
+  `holdCountdown` is its opposite and *only* cancels — sitting down, standing up and leaving all go
+  through it. A room that dealt itself a round the moment a second person sat down gave the host no
+  way to fill a table or read the rules without racing a clock they never started.
+- **A prompt lives until it is solved.** `submitWord` draws the next one; `explode` hands the same
+  one on and counts the failure in `games.promptFails`, replacing it only at `rooms.maxPromptAge`.
+  Every path that passes the bomb without a correct answer — an explosion, standing up, leaving —
+  must pass `keepPrompt`, or a player walking away silently rescues the table from a hard prompt.
 - **Spectators sit at `lives: 0`.** `nextLivingSeat` / `livingSeats` must always be handed
   `seatedOf(players)` first — an unfiltered list reads every watcher as an eliminated player and
   ends the round the moment anyone opens the page.
@@ -172,6 +201,30 @@ client ~8× a second. `typing` holds one row per room behind its own two-field q
 page subscribes to alongside `view`. No SSE and no second transport: Convex's existing websocket
 already pushes it. Everyone stands up when a round ends, so `players.playedRound` — not `seated` —
 is what the results screen uses to draw the table that just played.
+
+**That one row says two different kinds of thing.** A *live draft* belongs to the turn in progress
+and dies with it — `startTurn` calls `clearTyping` on every turn change. A *verdict* deliberately
+outlives its turn: `accepted: true` is the word that won it (written by `submitWord` **after**
+`startTurn`, or it would be wiped), and `failed: true` is the word the bomb went off on (written by
+`explode`, likewise after `startTurn`, from a copy of the text read *before* it). Both stand under
+the seat that played them until the next player's first keystroke overwrites the row. Two rules
+follow, and neither is enforced by a type:
+
+- **Every writer must say what the row is not.** `setTyping`, `bounceWord`, `submitWord` and
+  `clearTyping` all patch `failed: false` (and `accepted`) explicitly. A leftover flag strikes
+  through the next player's word.
+- **`explode` must check the row is the holder's, on this turn**, before preserving it — otherwise
+  the previous player's accepted word gets struck through as if this player had died on it.
+
+The client mirrors the split: `draftPlayerId` / `draftText` are the live typist, `verdict` is the
+settled word, and they are separate props because both are on screen at once — the new bomb holder's
+own box is empty and live while the previous player's word is still standing. `WordEntry` clears the
+parent's `draft` on mount (it is keyed on `turnSeq`, so that is once per turn) for the same reason:
+the local copy is the live one, and a stale local draft would redraw your dead word upright when the
+bomb came back to you.
+
+The last explosion of a round is the one exception — it clears the row rather than striking it
+through, because the results screen reuses those seats for the whole post-round view.
 
 `nextLivingSeat` deliberately returns `null` rather than wrapping onto the current holder — a lone
 survivor means the game is over, not that they pass the bomb to themselves. There is a test for it.
@@ -198,7 +251,7 @@ Import `base` from `$app/paths` and write `href="{base}/test"` / `` fetch(`${bas
 
 | path | what |
 |---|---|
-| `/` | lobby — inline room creation, live room browser, join by code |
+| `/` | lobby — title left, name-the-room + create on the right, live room browser, join by code |
 | `/r/[code]` | **one route** that renders waiting / playing / results off `room.state` |
 | `/test` | single-player, visible 10 s timer — the dev/QA page (was `/game`) |
 | `/word-management` | validator-comparison dashboard — the evidence for the whole approach |
@@ -208,16 +261,95 @@ pictionary project this borrows from) is where the race conditions live.
 
 **There is no name-entry modal, and entering a room always succeeds.** `enterRoom` puts you in as a
 watcher whatever the room is doing, so a shared link, a room-browser click and a refresh are the
-same action. Sitting down is the separate, deliberate act, and two seated players arm a *visible*
-10 s countdown that the host can hold by opening the rules panel.
+same action. Sitting down is the separate, deliberate act — and nothing follows from it on its own.
+The host presses **Spustit hru**, which arms a *visible* 5 s countdown (`COUNTDOWN_MS`) they can
+take back with `cancelStart`; opening the rules panel calls it off too. Closing the panel
+deliberately starts nothing, because agreeing the rules and deciding to play are two intentions.
+
+**The rules panel is a left drawer** (`RulesBar`), and every control in it writes on its own —
+`updateSettings` takes each field optionally and `close` separately, so the hearts on the waiting
+seats move while the host drags the slider. Sliders send on `change`, not `input`: a range fires
+input per pixel, so that is one mutation per drag rather than eighty. The room's timing rules
+(`minTurnMs`, `turnRange`, `maxPromptAge`) are all optional columns read through `roomRules`, which
+is the single place that knows what an unset field means.
 
 **The name gates the seat, not the door.** `getNickname()` returns `''` until its owner types one —
 deliberately *not* backfilled, because a box that has already written `Host4127` in itself is a box
 nobody edits. Both sit buttons (`BottomBar`, and the round-end one in the arena's `centre` snippet)
-and `CreateRoomPanel`'s create button are disabled while it is blank; creating a room is gated too
-because `createRoom` seats the host immediately. `guestNickname` still exists in `convex/rules.ts`
-and `enterRoom` still applies it, as the safety net that keeps `players.nickname` non-empty for a
-watcher who never types — it is not meant to be seen, and if it ever appears on a seat, a gate leaked.
+are disabled while it is blank, and `sit()` commits the profile before taking the seat — the name
+box is `ProfileTag`, floating in the top-left corner of the arena, nowhere near either button, and
+tapping a button on a phone does not reliably blur an input first. `guestNickname` still exists in `convex/rules.ts` and `enterRoom`
+still applies it, as the safety net that keeps `players.nickname` non-empty for a watcher who never
+types — it is not meant to be seen, and if it ever appears on a seat, a gate leaked.
+
+**One name per table, and it holds still during a round.** The bomb is handed on by name, so
+`sameNickname` (case- and padding-insensitive) is what "taken" means, and the two ways in are
+deliberately opposite:
+
+- **Walking in cannot fail**, so `enterRoom` *resolves* a clash with `uniqueNickname` — the second
+  Pavel enters as `Pavel 2`. The room page then syncs that back into the name box, or the box would
+  keep offering the name that was taken and every attempt to sit down would be refused. It only
+  adjusts a name its owner typed; an empty box stays empty, because the guest name behind it is a
+  safety net for the database and not a suggestion.
+- **Renaming is deliberate**, so `setProfile` *refuses* — `name-taken`, or `playing` if a round is
+  running and you are seated in it. Silently seating someone under a name they did not choose is
+  worse than telling them. `sit()` does not take the seat if the rename was refused.
+
+The avatar is never locked and never refused: two identical faces at a table are a joke, two
+identical names are a broken game. `ProfileTag` disables the box while a round runs so the rule is
+visible before you type into it, and shows the refusal underneath.
+
+**Between rounds the table stays drawn.** `seats` is the union of *who just played*
+(`playedRound === room.round`) and *who is dealt into the next one* (`seated || seatNext`), for the
+whole of `state === 'over'` — not just until the countdown arms. It used to fall back to `seated` the
+moment a clock started, so the table emptied out around the winner one player at a time as people
+opted back in. Whoever has not opted in is drawn dim (`dimIds` → `Seat`'s `dim`), because still
+being on screen must not read as playing the next one.
+
+**Creating a room does not always seat you.** The lobby asks for the *room's* name, not the
+player's, so `createRoom` takes an optional `nickname` — whatever the device already remembers — and
+seats the host **only if it is non-empty**, otherwise inserting them `seated: false, lives: 0` like
+any watcher. That is what keeps the gate honest with no name box on the lobby: an unnamed host lands
+in their own room watching and sits from the bottom bar, which asks for a name at the moment it
+means something. `seated` and `lives` must move together here — a seat at `lives: 0` reads as an
+eliminated player and ends the round the moment one starts.
+
+**`rooms.name` is optional and never generated.** Unlike a nickname it has no `guest…` fallback,
+because every room already has a name nobody chose: its code. `roomTitle(name, code)` is the one
+place that decides, and both the room browser and `RulesBar` go through it — the browser shows the
+code as its own chip and so prints nothing for an unnamed room instead of repeating it. Naming is
+not required to create a room; the create button has no gate at all now.
+
+**The lobby holds no game settings.** Difficulty and lives were segmented controls on the create
+panel and are now only in the room's rules drawer, where the host changes them with the table in
+front of them. `createRoom` still accepts both — `test-convex.mjs` uses `startingLives` — and
+defaults to `medium` / `DEFAULT_LIVES` when they are absent.
+
+**The room screen gives the arena everything it can.** `BottomBar` keeps its band but is down to one
+row — the seat button and the status line. Who you are (`ProfileTag`: the avatar picker and the name
+box) floats over the table in the arena's **bottom-left corner**, just above that band, costing the
+column no height; the corners are empty at every table size because the seats sit on a circle.
+
+Three things hold that in place, and each fixes a real failure:
+
+- It is anchored to the foot of a wrapper around `Arena`, **not** to the column, or it would land on
+  top of the word box — which on a phone is nearly as wide as the screen.
+- It stops click propagation, because the arena sends every click to the word box and reaching for
+  your own name on your own turn should not bounce the caret away. Its frame is `pointer-events-none`
+  so the space beside it is still arena.
+- `AvatarPicker` takes a `drop` direction (`up` here) so the grid opens over the table rather than
+  off the foot of the page.
+
+**The ring is a circle in pixels, not a percentage in each axis.** `Arena` measures its own box
+(`bind:clientWidth` / `clientHeight`) and places seats at one radius: `min(w/2 - 88, h/2 - 84)`, with
+a `MIN_RADIUS` floor of 138. Two percentages made an ellipse on any box that is not square — the
+side seats sat 250px from the bomb and the top ones 180px — and the arrow, sized off the box
+**width**, then lay across whoever sat at the top. The arrow is now `radius * 1.15` wide and drawn
+centred, so its head reaches 57 % of the way out: clear of the bomb at the near end and short of the
+nearest avatar at the far one, at every screen size, by construction. Anything that changes a seat's
+footprint changes `SEAT_HALF_W` / `SEAT_HALF_H` with it. The bomb's own size is one CSS variable
+(`--bomb`) set on its outer element and inherited by the ring, the twitch box and the image —
+they must agree, and four copies of the number is four places to miss.
 
 Assets live in `poc/static/` (`img/bomb.png`, `img/arrow.png`, `img/avatars/*`, `fonts/*.woff2`) and
 are referenced through `` `${base}/...` `` — see `src/lib/avatars.ts`. Adding a profile picture is a
@@ -289,7 +421,8 @@ directory and silently falls back to defaults if it isn't there.
 - Build command runs `convex deploy` first, which pushes Convex functions and injects
   `PUBLIC_CONVEX_URL` into the SvelteKit build.
 - Set `CONVEX_DEPLOY_KEY` in the Netlify UI (production deploy key from the Convex dashboard).
-- `included_files` puts `data/words.txt`, `prompts.json` and `meta.json` in the function bundle.
+- `included_files` puts `data/words.txt`, `prompts-v2.json` and `meta.json` in the function bundle.
+  Not `prompts.json`: nothing at runtime opens the v1 table.
   48 MB unzipped is far under the 250 MB cap; gzipped it lands ~10–12 MB, under the (undocumented
   but real) ~50 MB zipped cap.
 - **Cold starts are accepted.** Serverless means the 48 MB index is rebuilt per cold container —

@@ -33,6 +33,11 @@
           <span class="font-display text-lg font-bold tracking-[0.2em] text-gold">{room.code}</span>
 
           <span class="min-w-0 flex-1 truncate text-sm text-ink-dim">
+            <!-- The code is already its own chip, so an unnamed room says nothing
+                 here rather than repeating itself. -->
+            {#if room.name}<span class="font-medium text-ink">{room.name}</span>
+              ·
+            {/if}
             {cz.players(room.seated)}
             {#if room.watching > 0}<span class="text-ink-faint"> · {cz.watching(room.watching)}</span
               >{/if}

@@ -15,12 +15,17 @@ export function getMeta() {
   return (meta ??= JSON.parse(readFileSync(dataPath('meta.json'), 'utf8')));
 }
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'nightmare';
 export type Prompt = { substring: string; words: number; difficulty: string };
 
 let prompts: Prompt[] | undefined;
+/**
+ * The v2 banding — the same table as `prompts.json`, cut four ways instead of
+ * three. v1 stays on disk as the rating table the shipped prompts were sorted by;
+ * nothing at runtime reads it, so only this file is in `included_files`.
+ */
 export function getPrompts(): Prompt[] {
-  return (prompts ??= JSON.parse(readFileSync(dataPath('prompts.json'), 'utf8')));
+  return (prompts ??= JSON.parse(readFileSync(dataPath('prompts-v2.json'), 'utf8')));
 }
 
 /** Pick a random prompt of the requested difficulty — the game's core draw. */

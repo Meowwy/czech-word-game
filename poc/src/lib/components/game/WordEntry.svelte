@@ -2,6 +2,7 @@
   import { base } from '$app/paths';
   import { useConvexClient } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
+  import { SHAKE_MS } from '$lib/anim.ts';
 
   type Props = {
     code: string;
@@ -33,6 +34,14 @@
     message = $bindable(''),
   }: Props = $props();
 
+  // A new turn is a new attempt, and the remount is where that gets said: the
+  // parent's copy of the draft is what it draws under *your* seat on your turn,
+  // so leaving your last word in it meant the word you died on reappeared,
+  // upright and uncrossed, the moment the bomb came back round to you. The word
+  // that is meant to stand there between turns is the server's verdict row, not
+  // this.
+  draft = '';
+
   const client = useConvexClient();
 
   // Two pieces of text, deliberately: `boxed` is what is in the input, `draft`
@@ -52,14 +61,26 @@
     'not-your-turn': 'teď je na řadě někdo jiný',
   };
 
-  /** Keep the animation and the timer that ends it on the same clock. */
-  const SHAKE_MS = 560;
-
-  function reject(why: string) {
+  /**
+   * A word bounced. Shake it here, and tell the room.
+   *
+   * The local half is immediate — waiting for a round trip to react to your own
+   * key would be the one place a lost frame is felt. The mutation is what gets
+   * the same shake onto every other screen, and it carries the text as well, so
+   * a bounce that beat the throttle still leaves the whole word standing under
+   * the seat instead of however much of it the last draft happened to contain.
+   */
+  function reject(why: string, text: string) {
     message = why;
     rejected = true;
     clearTimeout(shakeTimer);
     shakeTimer = setTimeout(() => (rejected = false), SHAKE_MS);
+
+    // Drop any draft still queued: it would land behind the bounce and rewrite
+    // the text under the seat for everyone watching.
+    clearTimeout(flushTimer);
+    lastSentAt = Date.now();
+    void client.mutation(api.game.bounceWord, { code, deviceId, text });
   }
 
   // ── the typing broadcast ───────────────────────────────────────────────────
@@ -107,7 +128,7 @@
 
     // Cheap local check first, so an obvious miss costs no round trip at all.
     if (!word.includes(substring)) {
-      reject(`neobsahuje „${substring}“`);
+      reject(`neobsahuje „${substring}“`, typed);
       return;
     }
 
@@ -122,7 +143,7 @@
       const check = await res.json();
 
       if (!check.ok) {
-        reject(REASONS[check.reason] ?? 'takové slovo neznám');
+        reject(REASONS[check.reason] ?? 'takové slovo neznám', typed);
         return;
       }
 
@@ -134,10 +155,10 @@
         clearTimeout(flushTimer);
         message = '';
       } else {
-        reject(REASONS[result.reason] ?? 'nešlo to');
+        reject(REASONS[result.reason] ?? 'nešlo to', typed);
       }
     } catch {
-      reject('chyba spojení');
+      reject('chyba spojení', typed);
     } finally {
       busy = false;
     }

@@ -1,5 +1,5 @@
 {
-  "builtAt": "2026-08-15T08:33:48.008Z",
+  "builtAt": "2026-08-17T17:13:23.880Z",
   "candidates": 4270854,
   "rejectedUnknown": 794269,
   "rejectedAbbrevForeign": 672,
@@ -13,5 +13,11 @@
     "easy": 690,
     "medium": 2474,
     "hard": 5096
+  },
+  "byDifficultyV2": {
+    "easy": 690,
+    "medium": 662,
+    "hard": 1204,
+    "nightmare": 5704
   }
 }

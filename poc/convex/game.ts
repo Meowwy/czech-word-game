@@ -1,14 +1,6 @@
 import { v } from 'convex/values';
 import { internalMutation, mutation, query } from './_generated/server';
-import {
-  armCountdown,
-  gameOf,
-  playersOf,
-  roomByCode,
-  seatedOf,
-  startTurn,
-  typingRow,
-} from './turns';
+import { gameOf, playersOf, roomByCode, roomRules, seatedOf, startTurn, typingRow } from './turns';
 import { MAX_DRAFT, livingSeats, nextLivingSeat, normalizeWord } from './rules';
 
 /**
@@ -31,6 +23,8 @@ export const typingOf = query({
       turnSeq: row.turnSeq,
       text: row.text,
       accepted: row.accepted,
+      rejectSeq: row.rejectSeq ?? 0,
+      failed: row.failed ?? false,
     };
   },
 });
@@ -67,6 +61,9 @@ export const setTyping = mutation({
         turnSeq: game.turnSeq,
         text,
         accepted: false,
+        // The row outlives the turn now, so every writer has to say what it is
+        // not: a leftover `failed` would strike through the next player's word.
+        failed: false,
       });
     } else {
       await ctx.db.insert('typing', {
@@ -75,6 +72,57 @@ export const setTyping = mutation({
         turnSeq: game.turnSeq,
         text,
         accepted: false,
+      });
+    }
+  },
+});
+
+/**
+ * Broadcast a bounce: the holder tried a word and it was refused.
+ *
+ * The refusal itself is worked out on the client — the substring test is local
+ * and the dictionary lives in the Netlify function — so nothing here re-judges
+ * it. This exists only so the shake is something the whole table sees rather
+ * than a private animation on the typist's screen, which is why it writes no
+ * game state at all: the word stands under the seat, in red, until the next
+ * keystroke replaces it.
+ *
+ * `rejectSeq` is a counter, not a flag: trying the same wrong word twice has to
+ * be two shakes, and a boolean set to true while already true is not a change
+ * any subscriber would see.
+ */
+export const bounceWord = mutation({
+  args: { code: v.string(), deviceId: v.string(), text: v.string() },
+  handler: async (ctx, args) => {
+    const room = await roomByCode(ctx, args.code);
+    if (!room || room.state !== 'playing') return;
+
+    const game = await gameOf(ctx, room._id);
+    if (!game) return;
+
+    const players = await playersOf(ctx, room._id);
+    const me = players.find((p) => p.deviceId === args.deviceId);
+    if (!me || game.currentPlayerId !== me._id) return;
+
+    const text = args.text.slice(0, MAX_DRAFT);
+    const row = await typingRow(ctx, room._id);
+    if (row) {
+      await ctx.db.patch(row._id, {
+        playerId: me._id,
+        turnSeq: game.turnSeq,
+        text,
+        accepted: false,
+        failed: false,
+        rejectSeq: (row.rejectSeq ?? 0) + 1,
+      });
+    } else {
+      await ctx.db.insert('typing', {
+        roomId: room._id,
+        playerId: me._id,
+        turnSeq: game.turnSeq,
+        text,
+        accepted: false,
+        rejectSeq: 1,
       });
     }
   },
@@ -115,12 +163,13 @@ export const submitWord = mutation({
     await ctx.db.patch(game._id, { usedWords: [...game.usedWords, word] });
     await ctx.db.patch(me._id, { words: me.words + 1 });
 
+    // Solved, so the prompt has done its job: `startTurn` draws the next one and
+    // resets `promptFails` with it. A prompt only survives a turn it beat.
     const next = nextLivingSeat(seatedOf(players), me._id) ?? me;
     await startTurn(ctx, {
-      roomId: room._id,
+      room,
       gameId: game._id,
       turnSeq: game.turnSeq,
-      difficulty: room.difficulty,
       playerId: next._id,
       hits,
     });
@@ -136,6 +185,7 @@ export const submitWord = mutation({
         turnSeq: playedSeq,
         text: word,
         accepted: true,
+        failed: false,
       });
     } else {
       await ctx.db.insert('typing', {
@@ -170,6 +220,16 @@ export const explode = internalMutation({
 
     const holder = await ctx.db.get(game.currentPlayerId);
     if (!holder) return;
+
+    // What they had got to when the fuse ran out. Read before `startTurn`, which
+    // clears the draft, and only if the row really is this holder's work on this
+    // turn — an accepted word left standing by the previous player is somebody
+    // else's, and must not be struck through as if they had died on it.
+    const drafting = await typingRow(ctx, room._id);
+    const lastWord =
+      drafting && drafting.playerId === holder._id && drafting.turnSeq === game.turnSeq
+        ? drafting.text
+        : '';
 
     const lives = Math.max(0, holder.lives - 1);
     await ctx.db.patch(holder._id, { lives });
@@ -217,24 +277,49 @@ export const explode = internalMutation({
         winnerId: winner?._id,
       });
       const row = await typingRow(ctx, room._id);
-      if (row) await ctx.db.patch(row._id, { text: '', accepted: false });
-
-      // If two or more people had already asked for the next round, they are
-      // seated now and the clock should start without anyone clicking again.
-      await armCountdown(ctx, (await ctx.db.get(room._id))!);
+      // The last explosion clears the draft rather than striking it through: the
+      // results screen re-uses these seats for the table that just played, and a
+      // crossed-out word left under the loser would sit there for the whole
+      // post-round screen instead of for a beat.
+      if (row) await ctx.db.patch(row._id, { text: '', accepted: false, failed: false });
       return;
     }
 
     // The decay resets with the explosion: the next player gets a full fuse again.
     const next = nextLivingSeat(seated, holder._id);
     if (!next) return;
+
+    // The prompt was not solved, so it is handed on rather than replaced — a
+    // hard one is the table's problem, not one player's bad luck. `maxPromptAge`
+    // is the ceiling on that: once this many players have blown up on it, it is
+    // retired whether or not anyone ever found a word.
+    const fails = (game.promptFails ?? 0) + 1;
+    const retire = fails >= roomRules(room).maxPromptAge;
     await startTurn(ctx, {
-      roomId: room._id,
+      room,
       gameId: game._id,
       turnSeq: game.turnSeq,
-      difficulty: room.difficulty,
       playerId: next._id,
       hits: 0,
+      keepPrompt: retire ? undefined : game.substring,
+      promptFails: fails,
     });
+
+    // After `startTurn`, which cleared it — the same shape `submitWord` uses to
+    // leave a winning word standing, and the exact opposite meaning. It is
+    // tagged with the turn that lost it and survives until the next player's
+    // first keystroke overwrites the row.
+    if (lastWord) {
+      const row = await typingRow(ctx, room._id);
+      if (row) {
+        await ctx.db.patch(row._id, {
+          playerId: holder._id,
+          turnSeq: game.turnSeq,
+          text: lastWord,
+          accepted: false,
+          failed: true,
+        });
+      }
+    }
   },
 });

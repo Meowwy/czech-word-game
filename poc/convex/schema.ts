@@ -1,16 +1,43 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
-export const difficulty = v.union(v.literal('easy'), v.literal('medium'), v.literal('hard'));
+// Widened, not changed: rooms stored before `nightmare` existed still validate.
+// Keep in step with DIFFICULTIES in rules.ts — Convex validators cannot be built
+// from a TS const array, so this is the one list that has to be repeated.
+export const difficulty = v.union(
+  v.literal('easy'),
+  v.literal('medium'),
+  v.literal('hard'),
+  v.literal('nightmare'),
+);
+
+/** The three fuse windows offered in the rules panel — see TURN_RANGES. */
+export const turnRange = v.union(v.literal('short'), v.literal('normal'), v.literal('long'));
 
 export default defineSchema({
   rooms: defineTable({
     code: v.string(),
+    // What the host called the room in the lobby. Optional: rooms created before
+    // the field existed have none, and naming one is never required — a room
+    // with no name is displayed as its code, which it always had anyway.
+    name: v.optional(v.string()),
     hostDeviceId: v.string(),
     state: v.union(v.literal('lobby'), v.literal('playing'), v.literal('over')),
     difficulty,
     startingLives: v.number(),
     createdAt: v.number(),
+
+    // ── the host's rules ────────────────────────────────────────────────────
+    // All three are optional so rooms created before the panel existed keep
+    // working; every reader goes through the defaults in `roomRules`, which is
+    // the only place that knows what "unset" means.
+    //
+    // The shortest a turn may get, however long the streak.
+    minTurnMs: v.optional(v.number()),
+    // Which window a fresh fuse is drawn from after an explosion.
+    turnRange: v.optional(turnRange),
+    // How many players may blow up on one prompt before it is replaced.
+    maxPromptAge: v.optional(v.number()),
 
     // Which round of this room we are on. Rooms are long-lived; games are not.
     round: v.number(),
@@ -76,6 +103,11 @@ export default defineSchema({
     // Epoch ms. NEVER returned to clients: the hidden timer is the whole mechanic.
     deadline: v.number(),
     hitsSinceExplosion: v.number(),
+    // How many players have blown up on the CURRENT prompt. A prompt lives until
+    // somebody solves it, so this is what stops one nobody can answer from
+    // eating the whole table — at `rooms.maxPromptAge` it is replaced anyway.
+    // Optional for the same reason as the room settings above.
+    promptFails: v.optional(v.number()),
     // Banned for everyone for the rest of the game. An array on one document is
     // fine here — the 1 MiB document cap is ~100k words.
     usedWords: v.array(v.string()),
@@ -95,11 +127,21 @@ export default defineSchema({
   typing: defineTable({
     roomId: v.id('rooms'),
     playerId: v.id('players'),
-    // The turn this draft belongs to. Clients ignore rows from a finished turn
-    // rather than trusting delivery order.
+    // The turn this text belongs to. Clients ignore a *live* row from a finished
+    // turn rather than trusting delivery order — but `accepted` and `failed` rows
+    // are verdicts on the turn named here, and are meant to outlive it.
     turnSeq: v.number(),
     text: v.string(),
     // Set when the text is a word that was just accepted — the green flash.
     accepted: v.boolean(),
+    // Bumped every time a submission bounces, so the red shake reaches every
+    // screen and not just the typist's. A counter rather than a flag because the
+    // same word can be tried twice: a boolean going true→true is not a render.
+    // Optional so rows written before this field existed still validate.
+    rejectSeq: v.optional(v.number()),
+    // Set when the bomb went off on this text — the mirror image of `accepted`.
+    // The word stays under the seat, struck through, instead of vanishing with
+    // the turn that lost it. Optional for the same back-compat reason.
+    failed: v.optional(v.boolean()),
   }).index('by_room', ['roomId']),
 });
